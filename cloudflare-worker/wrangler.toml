@@ -1,0 +1,6 @@
+name = "nuvio-emby"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Workers domainini etkinleştirir (ücretsiz https://nuvio-emby.<subdomain>.workers.dev adresi sağlar)
+workers_dev = true

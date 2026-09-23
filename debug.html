@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nuvio Emby Eklentisi - Canlı Teşhis ve Test Paneli</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-hover: #0ea5e9;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+    }
+    .container { max-width: 1000px; margin: 0 auto; }
+    header {
+      margin-bottom: 28px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    h1 { font-size: 1.6rem; color: #fff; display: flex; align-items: center; gap: 10px; }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: #0284c7;
+      color: #fff;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2);
+    }
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--primary);
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 16px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
+    input, select {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      color: #fff;
+      font-size: 0.95rem;
+    }
+    input:focus { outline: none; border-color: var(--primary); }
+    .btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    button {
+      background: var(--primary);
+      color: #0f172a;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: var(--primary-hover); }
+    button.secondary { background: #334155; color: #fff; }
+    button.secondary:hover { background: #475569; }
+    .status-box {
+      padding: 14px;
+      border-radius: 8px;
+      margin-top: 14px;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .status-box.success { display: block; background: rgba(34, 197, 94, 0.15); border: 1px solid var(--success); color: #86efac; }
+    .status-box.danger { display: block; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: #fca5a5; }
+    .status-box.info { display: block; background: rgba(56, 189, 248, 0.15); border: 1px solid var(--primary); color: #bae6fd; }
+    .stream-item {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .stream-info h4 { font-size: 1rem; color: #fff; }
+    .stream-info p { font-size: 0.85rem; color: var(--text-muted); margin-top: 2px; }
+    .stream-actions { display: flex; gap: 8px; align-items: center; }
+    video { width: 100%; border-radius: 8px; margin-top: 14px; background: #000; max-height: 450px; }
+    pre {
+      background: #0b1120;
+      border: 1px solid var(--border);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      overflow-x: auto;
+      max-height: 250px;
+      color: #a5f3fc;
+    }
+    .guide-step {
+      background: #0f172a;
+      border-left: 4px solid var(--primary);
+      padding: 12px 16px;
+      margin-bottom: 10px;
+      border-radius: 0 8px 8px 0;
+    }
+    .guide-step strong { color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Nuvio Emby Teşhis Paneli</h1>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Emby Sunucusu, API Yetkilendirme ve Nuvio Akış Doğrulayıcı</p>
+      </div>
+      <div>
+        <span class="badge">v3.1.0</span>
+      </div>
+    </header>
+
+    <!-- 1. ADIM: EMBY BAĞLANTISI -->
+    <div class="card">
+      <div class="card-title">1. Emby Sunucu Yapılandırması & Oturum Doğrulama</div>
+      <div class="grid">
+        <div class="form-group">
+          <label>Emby Sunucu Adresi</label>
+          <input type="text" id="serverUrl" placeholder="https://emby.sunucunuz.com:8096" value="">
+        </div>
+        <div class="form-group">
+          <label>Kullanıcı Adı</label>
+          <input type="text" id="username" placeholder="Kullanıcı Adı" value="">
+        </div>
+        <div class="form-group">
+          <label>Şifre</label>
+          <input type="password" id="password" placeholder="Şifre" value="">
+        </div>
+      </div>
+      <div class="btn-group">
+        <button onclick="testConnection()">Bağlantıyı ve Girişi Test Et</button>
+        <button class="secondary" onclick="checkGithubRepo()">GitHub Depo Sağlığını Kontrol Et</button>
+      </div>
+      <div id="authStatus" class="status-box"></div>
+    </div>
+
+    <!-- 2. ADIM: AKIŞ TESTİ -->
+    <div class="card">
+      <div class="card-title">2. Medya Akışı Çözümleme (getStreams Testi)</div>
+      <div class="grid">
+        <div class="form-group">
+          <label>TMDB / IMDb ID veya Başlık</label>
+          <input type="text" id="mediaId" value="550" placeholder="Örn: 550, tt0137523, veya 1396">
+        </div>
+        <div class="form-group">
+          <label>Medya Türü</label>
+          <select id="mediaType" onchange="toggleTvInputs()">
+            <option value="movie">Film (Movie)</option>
+            <option value="tv">Dizi (TV Show)</option>
+          </select>
+        </div>
+        <div class="form-group tv-only" style="display: none;">
+          <label>Sezon No</label>
+          <input type="number" id="season" value="1">
+        </div>
+        <div class="form-group tv-only" style="display: none;">
+          <label>Bölüm No</label>
+          <input type="number" id="episode" value="1">
+        </div>
+      </div>
+      <div class="btn-group">
+        <button onclick="fetchStreams()">Akışları Getir (Direct Play)</button>
+        <button class="secondary" onclick="setPreset('550', 'movie')">Dövüş Kulübü (550)</button>
+        <button class="secondary" onclick="setPreset('tt0137523', 'movie')">Fight Club (IMDb)</button>
+        <button class="secondary" onclick="setPreset('1396', 'tv', 1, 1)">Breaking Bad (S01E01)</button>
+      </div>
+      <div id="streamStatus" class="status-box"></div>
+      <div id="streamResults" style="margin-top: 16px;"></div>
+      
+      <!-- Gömülü Video Oynatıcı -->
+      <div id="playerContainer" style="display: none; margin-top: 20px;">
+        <h3 style="font-size: 1.05rem; margin-bottom: 8px; color: var(--primary);">Canlı Oynatma Testi</h3>
+        <video id="videoPlayer" controls crossorigin="anonymous"></video>
+        <p id="playerSubtitleInfo" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;"></p>
+      </div>
+    </div>
+
+    <!-- 3. ADIM: NUVIO'DA NEDEN GÖRÜNMÜYOR REHBERİ -->
+    <div class="card">
+      <div class="card-title">3. Nuvio'da İçerik Görünmüyorsa Çözüm Rehberi</div>
+      <div class="guide-step">
+        <strong>A) Scraper (Kazıyıcı) vs Katalog Farkı:</strong>
+        <p>Nuvio'da Kazıyıcılar (Scrapers) ana sayfada film listesi basmaz. Bir filmi izlemek istediğinizde video linklerini bulur. Test etmek için <u>Nuvio arama çubuğuna</u> sunucunuzdaki bir filmin adını (örn: <em>Fight Club</em>) yazıp tıklamanız gerekir.</p>
+      </div>
+      <div class="guide-step">
+        <strong>B) Nuvio Önbelleğini Temizleme:</strong>
+        <p>Nuvio eklenti dosyalarını ilk indirişte cihaz hafızasına kaydeder. Yeni güncellemeleri almak için: <em>Nuvio -> Ayarlar -> Yerel Kazıyıcılar</em> ekranından Emby reposunu <strong>silip</strong> tekrar ekleyin:</p>
+        <code style="background: #000; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; color: #38bdf8;">https://raw.githubusercontent.com/Omc725/nuvio-emby-plugin/main/manifest.json</code>
+      </div>
+      <div class="guide-step">
+        <strong>C) Dahili Hata Ayıklama Modu:</strong>
+        <p>Nuvio'da Emby ayarlarına girip <strong>Hata Ayıklama Modu</strong>nu açtığınızda, film seçtiğinizde en üstte sunucu bağlantı durumunu ve bulunan kaynak sayısını belirten teşhis kartı görünür.</p>
+      </div>
+    </div>
+
+    <!-- 4. ADIM: CANLI LOG PENCERESİ -->
+    <div class="card">
+      <div class="card-title">Canlı Konsol / Loglar</div>
+      <pre id="logOutput">// Teşhis logları burada görünecektir...</pre>
+    </div>
+  </div>
+
+  <script>
+    let activeToken = null;
+    let activeUserId = null;
+
+    function log(msg) {
+      const output = document.getElementById("logOutput");
+      const time = new Date().toLocaleTimeString();
+      output.textContent += `\n[${time}] ${msg}`;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function toggleTvInputs() {
+      const type = document.getElementById("mediaType").value;
+      const tvElements = document.querySelectorAll(".tv-only");
+      tvElements.forEach(el => el.style.display = type === "tv" ? "block" : "none");
+    }
+
+    function setPreset(id, type, s = 1, e = 1) {
+      document.getElementById("mediaId").value = id;
+      document.getElementById("mediaType").value = type;
+      document.getElementById("season").value = s;
+      document.getElementById("episode").value = e;
+      toggleTvInputs();
+      fetchStreams();
+    }
+
+    async function testConnection() {
+      const serverUrl = document.getElementById("serverUrl").value.replace(/\/+$/, "");
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      const statusBox = document.getElementById("authStatus");
+
+      statusBox.className = "status-box info";
+      statusBox.textContent = "Emby sunucusuna bağlanılıyor...";
+      log(`Bağlantı testi başlatıldı: ${serverUrl} (${username})`);
+
+      try {
+        const res = await fetch(`${serverUrl}/emby/Users/AuthenticateByName`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Emby-Authorization": 'MediaBrowser Client="NuvioDebug", Device="Browser", DeviceId="debug-html", Version="3.1.0"'
+          },
+          body: JSON.stringify({ Username: username, Pw: password })
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+
+        const data = await res.json();
+        activeToken = data.AccessToken;
+        activeUserId = data.User?.Id;
+
+        statusBox.className = "status-box success";
+        statusBox.innerHTML = `<strong>✓ Bağlantı Başarılı!</strong><br>Kullanıcı: ${data.User?.Name} (ID: ${activeUserId})<br>AccessToken: ${activeToken.slice(0, 10)}... (Alındı)<br>Sunucu Adı: ${data.ServerId}`;
+        log(`Giriş başarılı! AccessToken: ${activeToken.slice(0, 8)}... UserId: ${activeUserId}`);
+
+        // Kütüphane sayısını al
+        const countRes = await fetch(`${serverUrl}/emby/Users/${activeUserId}/Items?IncludeItemTypes=Movie&Recursive=true&Limit=1&api_key=${activeToken}`);
+        const countData = await countRes.json();
+        log(`Emby Kütüphanesindeki Toplam Film Sayısı: ${countData.TotalRecordCount}`);
+      } catch (err) {
+        statusBox.className = "status-box danger";
+        statusBox.innerHTML = `<strong>✗ Bağlantı Hatası:</strong> ${err.message}`;
+        log(`HATA: ${err.message}`);
+      }
+    }
+
+    async function fetchStreams() {
+      if (!activeToken || !activeUserId) {
+        await testConnection();
+        if (!activeToken) return;
+      }
+
+      const serverUrl = document.getElementById("serverUrl").value.replace(/\/+$/, "");
+      const mediaId = document.getElementById("mediaId").value.trim();
+      const mediaType = document.getElementById("mediaType").value;
+      const season = document.getElementById("season").value;
+      const episode = document.getElementById("episode").value;
+      const statusBox = document.getElementById("streamStatus");
+      const resultsDiv = document.getElementById("streamResults");
+
+      statusBox.className = "status-box info";
+      statusBox.textContent = `Emby'de aranıyor: ${mediaId} (${mediaType})...`;
+      resultsDiv.innerHTML = "";
+      log(`getStreams simülasyonu: ID: ${mediaId}, Tür: ${mediaType}, S: ${season}, E: ${episode}`);
+
+      try {
+        const isTv = mediaType === "tv";
+        const itemType = isTv ? "Series" : "Movie";
+
+        // ID temizleme
+        let cleanId = mediaId.replace(/^(tmdb|imdb|movie|tv|series):/i, "");
+        if (cleanId.includes(":")) {
+          cleanId = cleanId.split(":")[0];
+        }
+
+        const isImdb = /^tt\d+/i.test(cleanId);
+        const query = isImdb ? `imdb.${cleanId}` : `tmdb.${cleanId}`;
+
+        log(`AnyProviderIdEquals sorgusu yapılıyor: ${query}`);
+        const searchRes = await fetch(`${serverUrl}/emby/Users/${activeUserId}/Items?AnyProviderIdEquals=${encodeURIComponent(query)}&IncludeItemTypes=${itemType}&Recursive=true&api_key=${activeToken}`);
+        const searchData = await searchRes.json();
+
+        let matchedItem = (searchData.Items && searchData.Items.length > 0) ? searchData.Items[0] : null;
+
+        if (!matchedItem) {
+          log(`ProviderId ile eşleşmedi. 'SearchTerm' ile deneniyor: ${cleanId}`);
+          const termRes = await fetch(`${serverUrl}/emby/Users/${activeUserId}/Items?SearchTerm=${encodeURIComponent(cleanId)}&IncludeItemTypes=${itemType}&Recursive=true&api_key=${activeToken}`);
+          const termData = await termRes.json();
+          if (termData.Items && termData.Items.length > 0) {
+            matchedItem = termData.Items[0];
+            log(`SearchTerm ile bulundu: ${matchedItem.Name}`);
+          }
+        }
+
+        if (!matchedItem) {
+          throw new Error(`Emby arşivinde eşleşen ${itemType} bulunamadı (ID: ${cleanId})`);
+        }
+
+        log(`Bulunan Medya: ${matchedItem.Name} (Emby ID: ${matchedItem.Id})`);
+
+        let targetItemId = matchedItem.Id;
+
+        if (isTv) {
+          log(`Dizi bölümü aranıyor: S${season}E${episode}`);
+          const epRes = await fetch(`${serverUrl}/emby/Shows/${matchedItem.Id}/Episodes?Season=${season}&api_key=${activeToken}&UserId=${activeUserId}`);
+          const epData = await epRes.json();
+          const ep = epData.Items?.find(i => Number(i.IndexNumber) === Number(episode) && Number(i.ParentIndexNumber) === Number(season));
+          if (!ep) throw new Error(`Dizide S${season}E${episode} bölümü bulunamadı`);
+          targetItemId = ep.Id;
+          log(`Bölüm bulundu: ${ep.Name} (ID: ${ep.Id})`);
+        }
+
+        // PlaybackInfo al
+        log("PlaybackInfo sorgulanıyor...");
+        const pbRes = await fetch(`${serverUrl}/emby/Items/${targetItemId}/PlaybackInfo?api_key=${activeToken}&UserId=${activeUserId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ UserId: activeUserId })
+        });
+        const pbData = await pbRes.json();
+
+        const mediaSources = pbData.MediaSources || [];
+        if (mediaSources.length === 0) {
+          throw new Error("Bu medya için oynatılabilir MediaSource bulunamadı");
+        }
+
+        statusBox.className = "status-box success";
+        statusBox.innerHTML = `<strong>✓ Başarılı:</strong> ${matchedItem.Name} için ${mediaSources.length} adet doğrudan akış kaynağı üretildi.`;
+
+        resultsDiv.innerHTML = "";
+        mediaSources.forEach((source, idx) => {
+          const videoStream = source.MediaStreams?.find(s => s.Type === "Video");
+          const audioStream = source.MediaStreams?.find(s => s.Type === "Audio");
+          const streamUrl = `${serverUrl}/emby/Videos/${targetItemId}/stream?static=true&MediaSourceId=${encodeURIComponent(source.Id)}&api_key=${encodeURIComponent(activeToken)}`;
+
+          const quality = videoStream ? (videoStream.Height >= 2160 ? "4K" : videoStream.Height >= 1080 ? "1080p" : "720p") : "HD";
+          const codec = videoStream?.Codec?.toUpperCase() || "H264";
+          const audio = audioStream ? `${audioStream.Codec?.toUpperCase()} (${audioStream.Language || "und"})` : "Bilinmiyor";
+
+          const card = document.createElement("div");
+          card.className = "stream-item";
+          card.innerHTML = `
+            <div class="stream-info">
+              <h4>[Emby] ${quality} • Direct Play (${source.Container?.toUpperCase() || "MP4"})</h4>
+              <p>Video: ${codec} • Ses: ${audio} • Boyut: ${(source.Size ? (source.Size / 1e9).toFixed(2) + " GB" : "Bilinmiyor")}</p>
+              <p style="font-size: 0.75rem; color: #64748b; word-break: break-all; margin-top: 4px;">${streamUrl}</p>
+            </div>
+            <div class="stream-actions">
+              <button onclick="playStream('${streamUrl}', '${targetItemId}', '${source.Id}')">Tarayıcıda Oynat</button>
+            </div>
+          `;
+          resultsDiv.appendChild(card);
+        });
+
+      } catch (err) {
+        statusBox.className = "status-box danger";
+        statusBox.innerHTML = `<strong>✗ Akış Hatası:</strong> ${err.message}`;
+        log(`HATA: ${err.message}`);
+      }
+    }
+
+    async function playStream(url, itemId, mediaSourceId) {
+      const container = document.getElementById("playerContainer");
+      const player = document.getElementById("videoPlayer");
+      const subInfo = document.getElementById("playerSubtitleInfo");
+
+      container.style.display = "block";
+      player.src = url;
+      player.load();
+      player.play().catch(e => log(`Video otomatik oynatılamadı: ${e.message}`));
+      subInfo.textContent = `Oynatılan URL: ${url}`;
+      log(`Video oynatıcı yüklendi: ${url}`);
+      container.scrollIntoView({ behavior: "smooth" });
+    }
+
+    async function checkGithubRepo() {
+      log("GitHub raw deposu kontrol ediliyor...");
+      const manifestUrl = "https://raw.githubusercontent.com/Omc725/nuvio-emby-plugin/main/manifest.json";
+      try {
+        const res = await fetch(manifestUrl + "?t=" + Date.now());
+        const data = await res.json();
+        log(`GitHub Manifest Erişilebilir! Sürüm: ${data.version}, Scraper: ${data.scrapers?.[0]?.name} (${data.scrapers?.[0]?.filename})`);
+        alert(`GitHub Deposu Sağlıklı!\nSürüm: ${data.version}\nDosya: ${data.scrapers?.[0]?.filename}`);
+      } catch (err) {
+        log(`GitHub kontrol hatası: ${err.message}`);
+        alert(`GitHub erişim hatası: ${err.message}`);
+      }
+    }
+  </script>
+</body>
+</html>

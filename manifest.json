@@ -1,0 +1,32 @@
+{
+  "name": "Nuvio Emby Repository",
+  "version": "3.5.0",
+  "description": "Nuvio medya oynatıcısı için Emby sağlayıcı deposu",
+  "scrapers": [
+    {
+      "id": "emby",
+      "name": "Emby",
+      "description": "Emby yerel ve uzak sunucuları için doğrudan oynatma (Direct Play) ve altyazı sağlayıcısı",
+      "version": "3.5.0",
+      "author": "Omc725",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/emby.js",
+      "enabled": true,
+      "hasSettings": true,
+      "formats": [
+        "mp4",
+        "mkv",
+        "hls"
+      ],
+      "logo": "https://emby.media/images/embyicon.png",
+      "contentLanguage": [
+        "tr",
+        "en"
+      ],
+      "supportsExternalPlayer": true
+    }
+  ]
+}
