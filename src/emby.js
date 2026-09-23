@@ -1235,6 +1235,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
       const filename = source.Path ? source.Path.split(/[\\/]/).pop() : (source.Name || "stream");
       const streamUrl = `${serverUrl}/emby/Videos/${targetItemId}/stream.${container.toLowerCase()}?static=true&MediaSourceId=${encodeURIComponent(source.Id)}&api_key=${encodeURIComponent(apiKey)}`;
       const subtitles = extractSubtitles(serverUrl, targetItemId, source, apiKey);
+      const techDetails = [dimensions, hdrTag, videoTag, audioTag, container, bitrateFormatted].filter(Boolean).join(" • ");
 
       streams.push({
         name: "Emby",
@@ -1243,6 +1244,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         url: streamUrl,
         quality: qualityTag,
         size: sizeFormatted || "",
+        language: techDetails || "",
         provider: "emby",
         type: container.toLowerCase(),
         headers: {

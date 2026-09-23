@@ -22,7 +22,25 @@ if (!fs.existsSync(WORKER_DIR)) {
 }
 
 const embyJsContent = fs.readFileSync(EMBY_JS_PATH, 'utf8');
-const manifestContent = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+const scraperManifestContent = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+
+// Unified Manifest: Supports BOTH Stremio Addon (for rich multi-line card + BOYUT badge) AND Local Scraper
+const UNIFIED_MANIFEST = {
+  id: "org.omc725.nuvioemby",
+  name: "Emby",
+  version: "3.5.0",
+  description: "Nuvio & Stremio doğrudan oynatma (Direct Play) eklentisi",
+  logo: "https://emby.media/images/embyicon.png",
+  resources: ["stream"],
+  types: ["movie", "series", "tv"],
+  idPrefixes: ["tt", "tmdb:"],
+  catalogs: [],
+  behaviorHints: {
+    configurable: false,
+    configurationRequired: false
+  },
+  scrapers: scraperManifestContent.scrapers || []
+};
 
 // HTML Configurator Template
 const HTML_CONFIGURATOR = `<!DOCTYPE html>
@@ -53,11 +71,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       --success: #10b981;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       background-color: var(--bg);
@@ -75,15 +89,8 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       line-height: 1.6;
     }
 
-    .container {
-      width: 100%;
-      max-width: 640px;
-    }
-
-    .header {
-      text-align: center;
-      margin-bottom: 2rem;
-    }
+    .container { width: 100%; max-width: 640px; }
+    .header { text-align: center; margin-bottom: 2rem; }
 
     .badge-row {
       display: flex;
@@ -124,10 +131,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       -webkit-text-fill-color: transparent;
     }
 
-    .subtitle {
-      color: var(--text-muted);
-      font-size: 0.95rem;
-    }
+    .subtitle { color: var(--text-muted); font-size: 0.95rem; }
 
     .card {
       background: var(--card-bg);
@@ -140,13 +144,8 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       margin-bottom: 1.5rem;
     }
 
-    .form-group {
-      margin-bottom: 1.25rem;
-    }
-
-    .form-group:last-child {
-      margin-bottom: 0;
-    }
+    .form-group { margin-bottom: 1.25rem; }
+    .form-group:last-child { margin-bottom: 0; }
 
     label {
       display: flex;
@@ -158,20 +157,11 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       color: #e2e8f0;
     }
 
-    .label-hint {
-      font-size: 0.75rem;
-      font-weight: 400;
-      color: var(--text-muted);
-    }
+    .label-hint { font-size: 0.75rem; font-weight: 400; color: var(--text-muted); }
 
-    .input-wrapper {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
+    .input-wrapper { position: relative; display: flex; align-items: center; }
 
-    input[type="text"],
-    input[type="password"] {
+    input[type="text"], input[type="password"] {
       width: 100%;
       background: var(--input-bg);
       border: 1px solid var(--input-border);
@@ -184,8 +174,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       outline: none;
     }
 
-    input[type="text"]:focus,
-    input[type="password"]:focus {
+    input[type="text"]:focus, input[type="password"]:focus {
       border-color: var(--input-focus);
       box-shadow: 0 0 0 3px rgba(82, 181, 75, 0.15);
     }
@@ -204,9 +193,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       transition: color 0.2s;
     }
 
-    .toggle-pwd:hover {
-      color: var(--text);
-    }
+    .toggle-pwd:hover { color: var(--text); }
 
     .collapsible-trigger {
       display: flex;
@@ -224,9 +211,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       transition: color 0.2s;
     }
 
-    .collapsible-trigger:hover {
-      color: var(--text);
-    }
+    .collapsible-trigger:hover { color: var(--text); }
 
     .collapsible-content {
       display: none;
@@ -235,9 +220,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       margin-top: 0.5rem;
     }
 
-    .collapsible-content.open {
-      display: block;
-    }
+    .collapsible-content.open { display: block; }
 
     .checkbox-group {
       display: flex;
@@ -284,9 +267,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       border: 1px solid var(--card-border) !important;
     }
 
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.12);
-    }
+    .btn-secondary:hover { background: rgba(255, 255, 255, 0.12); }
 
     .btn-primary {
       background: var(--accent-gradient);
@@ -310,9 +291,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       gap: 0.6rem;
     }
 
-    .status-box.show {
-      display: flex;
-    }
+    .status-box.show { display: flex; }
 
     .status-box.success {
       background: rgba(16, 185, 129, 0.15);
@@ -332,15 +311,8 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       color: #818cf8;
     }
 
-    /* Result Card */
-    .result-card {
-      display: none;
-      animation: fadeIn 0.3s ease;
-    }
-
-    .result-card.show {
-      display: block;
-    }
+    .result-card { display: none; animation: fadeIn 0.3s ease; }
+    .result-card.show { display: block; }
 
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(8px); }
@@ -383,9 +355,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       transition: all 0.2s;
     }
 
-    .copy-btn:hover {
-      background: rgba(255, 255, 255, 0.15);
-    }
+    .copy-btn:hover { background: rgba(255, 255, 255, 0.15); }
 
     .qr-section {
       display: flex;
@@ -407,9 +377,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       align-items: center;
     }
 
-    #qrcode img {
-      display: block;
-    }
+    #qrcode img { display: block; }
 
     .steps-list {
       margin-top: 1.25rem;
@@ -418,13 +386,8 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       font-size: 0.875rem;
     }
 
-    .steps-list li {
-      margin-bottom: 0.5rem;
-    }
-
-    .steps-list li strong {
-      color: #ffffff;
-    }
+    .steps-list li { margin-bottom: 0.65rem; }
+    .steps-list li strong { color: #ffffff; }
 
     .footer {
       text-align: center;
@@ -433,14 +396,8 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       margin-top: 1rem;
     }
 
-    .footer a {
-      color: #cbd5e1;
-      text-decoration: none;
-    }
-
-    .footer a:hover {
-      text-decoration: underline;
-    }
+    .footer a { color: #cbd5e1; text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
 
     .spinner {
       width: 14px;
@@ -452,9 +409,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       display: inline-block;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -467,11 +422,11 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
           Emby v3.5.0
         </div>
         <div class="badge">
-          Nuvio Native Direct Play
+          Nuvio & Stremio Direct Play
         </div>
       </div>
       <h1>Nuvio Emby Yapılandırıcı</h1>
-      <p class="subtitle">Emby sunucunuzu bağlayın ve Nuvio için kişiselleştirilmiş manifest bağlantınızı oluşturun.</p>
+      <p class="subtitle">Emby sunucunuzu bağlayın; Nuvio için zengin kart ve BOYUT rozeti destekli manifestinizi üretin.</p>
     </div>
 
     <!-- Yapılandırma Formu -->
@@ -550,7 +505,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
     <!-- Sonuç Bölümü -->
     <div class="card result-card" id="resultCard">
       <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 0.5rem; color: #10b981;">🎉 Manifest URL'niz Hazır!</h3>
-      <p style="font-size: 0.85rem; color: var(--text-muted);">Aşağıdaki bağlantı sadece sizin sunucunuz ve kimlik bilgilerinizle yapılandırılmış özel eklenti adresidir.</p>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">Aşağıdaki bağlantı Emby sunucunuz ve kimlik bilgilerinizle yapılandırılmış kişisel manifest adresinizdir.</p>
 
       <div class="url-box">
         <span class="url-text" id="manifestUrlText"></span>
@@ -565,17 +520,17 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
         <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.65rem;">Android TV veya telefon kamerasından kolayca taratabilirsiniz</span>
       </div>
 
-      <h4 style="font-size: 0.95rem; font-weight: 700; margin-top: 1rem; color: #f1f5f9;">📲 Nuvio'ya Nasıl Eklenir?</h4>
+      <h4 style="font-size: 0.95rem; font-weight: 700; margin-top: 1rem; color: #f1f5f9;">📲 Nuvio'ya Nasıl Eklenir? (Önemli)</h4>
       <ol class="steps-list">
         <li>Yukarıdaki URL'yi kopyalayın.</li>
-        <li><strong>Nuvio</strong> uygulamasını açın ve <strong>Ayarlar (Settings) > Eklentiler (Plugins)</strong> bölümüne gidin.</li>
-        <li><strong>Eklenti Ekle (Add Plugin)</strong> butonuna basarak URL'yi yapıştırın ve onaylayın.</li>
-        <li>Artık Emby içerikleriniz doğrudan Direct Play hızında Nuvio oynatıcınızda listelenecektir!</li>
+        <li>Nuvio uygulamasını açın ve <strong>Ayarlar (Settings) > Eklentiler (Addons / Plugins) > Eklenti Ekle (Add Addon)</strong> bölümüne gidin.</li>
+        <li>Kopyaladığınız manifest URL'sini yapıştırın ve <strong>Ekle</strong> butonuna basın.</li>
+        <li><strong>Tebrikler!</strong> Artık akış listenizde <code>1080p • 1920x1080</code>, <code>HEVC 10bit</code>, <code>DD+ 2.0</code>, <code>MKV • 3.0Mbps</code> ve <strong>[BOYUT 412 MB]</strong> rozetiyle zengin detaylı kartlar görüntülenecektir!</li>
       </ol>
     </div>
 
     <div class="footer">
-      <p>🔒 <strong>Sıfır Günlük ve Güvenlik Garantisi:</strong> Kimlik bilgileriniz hiçbir sunucuda depolanmaz. Yapılandırma istemci tarafında URL-safe Base64 olarak kodlanır.</p>
+      <p>🔒 <strong>Sıfır Günlük & Güvenlik Garantisi:</strong> Kimlik bilgileriniz hiçbir sunucuda depolanmaz. Yapılandırma istemci tarafında URL-safe Base64 olarak kodlanır.</p>
     </div>
   </div>
 
@@ -752,13 +707,15 @@ const WORKER_CODE = `/**
  * 
  * Provides:
  *  1. Interactive Turkish Web Configurator at / and /configure
- *  2. Personalized dynamic manifest at /:config/manifest.json
+ *  2. Full Stremio Addon Protocol for Nuvio (Rich multi-line card + BOYUT badge):
+ *     - /:config/manifest.json
+ *     - /:config/stream/:type/:id.json
  *  3. Injected transpiled emby.js at /:config/providers/emby.js and /:config/emby.js
  *  4. Live connection test proxy at /api/test-connection
  *  5. Unconfigured fallback at /manifest.json and /providers/emby.js
  */
 
-const BASE_MANIFEST = ${JSON.stringify(manifestContent, null, 2)};
+const BASE_MANIFEST = ${JSON.stringify(UNIFIED_MANIFEST, null, 2)};
 const EMBY_BASE_CODE = ${JSON.stringify(embyJsContent)};
 const HTML_PAGE = ${JSON.stringify(HTML_CONFIGURATOR)};
 
@@ -804,6 +761,385 @@ function corsHeaders(extra = {}) {
   };
 }
 
+// ==========================================
+// MEDIA INFO FORMATTING & STREAM HELPERS
+// ==========================================
+
+function getQualityTag(videoStream) {
+  if (!videoStream) return "Unknown";
+  const height = Number(videoStream.Height) || 0;
+  const width = Number(videoStream.Width) || 0;
+  const displayTitle = videoStream.DisplayTitle || "";
+
+  const match = displayTitle.match(/\\b(\\d+k|4k|2160p|1440p|1080p|720p|576p|480p|sd)\\b/i);
+  if (match) {
+    const res = match[1].toUpperCase();
+    if (res.includes("4K") || res.includes("2160")) return "4K";
+    if (res.includes("1440")) return "1440p";
+    if (res.includes("1080")) return "1080p";
+    if (res.includes("720")) return "720p";
+    if (res.includes("576")) return "576p";
+    if (res.includes("480")) return "480p";
+  }
+
+  if (width >= 3840 || height >= 2160) return "4K";
+  if (height >= 1440) return "1440p";
+  if (height >= 1080) return "1080p";
+  if (height >= 720) return "720p";
+  if (height >= 576) return "576p";
+  if (height >= 480) return "480p";
+  return "SD";
+}
+
+function getResolutionDimensions(videoStream) {
+  if (!videoStream || !videoStream.Width || !videoStream.Height) return null;
+  return \`\${videoStream.Width}x\${videoStream.Height}\`;
+}
+
+function getVideoTag(videoStream) {
+  if (!videoStream) return "";
+  const codec = (videoStream.Codec || "").toUpperCase();
+  const profile = videoStream.Profile || "";
+  const codecMap = {
+    "H264": "H.264", "AVC": "H.264", "H265": "HEVC", "HEVC": "HEVC",
+    "VP8": "VP8", "VP9": "VP9", "AV1": "AV1", "MPEG2VIDEO": "MPEG-2", "VC1": "VC-1"
+  };
+  const displayCodec = codecMap[codec] || codec || "";
+  if (profile && ["Main10", "High10", "Main 10"].some(p => profile.includes(p))) {
+    return \`\${displayCodec} 10bit\`;
+  }
+  if (Number(videoStream.BitDepth) >= 10 && !displayCodec.includes("10bit")) {
+    return \`\${displayCodec} 10bit\`;
+  }
+  return displayCodec;
+}
+
+function getHdrTag(videoStream) {
+  if (!videoStream) return null;
+  switch (videoStream.ExtendedVideoType) {
+    case "Hdr10": return "HDR10";
+    case "Hdr10Plus": return "HDR10+";
+    case "HyperLogGamma": return "HLG";
+    case "DolbyVision": return "DV";
+    default: break;
+  }
+  if (videoStream.ColorTransfer === "smpte2084") return "HDR10";
+  if (videoStream.ColorTransfer === "arib-std-b67") return "HLG";
+  const raw = String(videoStream.VideoRange || "").toUpperCase();
+  if (raw.includes("DOVI") || raw.includes("DOLBY VISION") || raw.includes("DV")) return "DV";
+  if (raw.includes("HDR10+") || raw.includes("HDR 10+")) return "HDR10+";
+  if (raw.includes("HDR10") || raw.includes("HDR 10")) return "HDR10";
+  if (raw.includes("HDR")) return "HDR";
+  if (raw.includes("HLG")) return "HLG";
+  return null;
+}
+
+function getAudioTag(audioStream) {
+  if (!audioStream) return "";
+  const codec = (audioStream.Codec || "").toUpperCase();
+  const channels = audioStream.Channels;
+  const title = (audioStream.DisplayTitle || "").toUpperCase();
+
+  const codecMap = {
+    "AAC": "AAC", "AC3": "DD", "EAC3": "DD+", "DTS": "DTS", "DTSHD": "DTS-HD",
+    "TRUEHD": "TrueHD", "FLAC": "FLAC", "OPUS": "Opus", "MP3": "MP3"
+  };
+
+  let displayCodec = codecMap[codec] || codec || "Unknown";
+  if (codec === "DTS" && (title.includes("DTS-HD") || title.includes("MA") || title.includes("MASTER"))) {
+    displayCodec = "DTS-HD MA";
+  } else if (codec === "DTS" && title.includes("DTS:X")) {
+    displayCodec = "DTS:X";
+  }
+  if (title.includes("ATMOS")) {
+    displayCodec = \`\${displayCodec} Atmos\`;
+  }
+
+  let channelStr = "";
+  if (channels === 1) channelStr = "Mono";
+  else if (channels === 2) channelStr = "2.0";
+  else if (channels === 6) channelStr = "5.1";
+  else if (channels === 8) channelStr = "7.1";
+  else if (channels) channelStr = \`\${channels}ch\`;
+
+  return channelStr ? \`\${displayCodec} \${channelStr}\` : displayCodec;
+}
+
+function isRemux(source) {
+  if (!source) return false;
+  const path = (source.Path || "").toLowerCase();
+  const name = (source.Name || "").toLowerCase();
+  return path.includes("remux") || name.includes("remux");
+}
+
+function formatBitrate(bps) {
+  if (!bps || bps === 0) return null;
+  const mbps = (Number(bps) / 1000000).toFixed(1);
+  return \`\${mbps}Mbps\`;
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return null;
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = Number(bytes);
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex++;
+  }
+  const decimals = unitIndex >= 3 ? 1 : 0;
+  return \`\${size.toFixed(decimals)}\${units[unitIndex]}\`;
+}
+
+function buildStreamDescription(mediaInfo) {
+  const lines = [];
+
+  // Satır 1: Çözünürlük • Boyutlar (Örn: 1080p • 1920x1080)
+  const resLine = [];
+  if (mediaInfo.qualityTag && mediaInfo.qualityTag !== "Unknown") resLine.push(mediaInfo.qualityTag);
+  if (mediaInfo.resolutionDimensions) resLine.push(mediaInfo.resolutionDimensions);
+  if (resLine.length > 0) lines.push(resLine.join(" • "));
+
+  // Satır 2: HDR/DV • Video Codec (Örn: HEVC 10bit)
+  const typeLine = [];
+  if (mediaInfo.hdrTag) typeLine.push(mediaInfo.hdrTag);
+  if (mediaInfo.videoTag) typeLine.push(mediaInfo.videoTag);
+  if (typeLine.length > 0) lines.push(typeLine.join(" • "));
+
+  // Satır 3: REMUX (varsa)
+  if (mediaInfo.isRemux) lines.push("REMUX");
+
+  // Satır 4: Ses Formatı (Örn: DD+ 2.0)
+  if (mediaInfo.audioTag) lines.push(mediaInfo.audioTag);
+
+  // Satır 5: Kapsayıcı • Bitrate • Boyut (Örn: MKV • 3.0Mbps • 412MB)
+  const fileLine = [];
+  if (mediaInfo.container) fileLine.push(mediaInfo.container);
+  if (mediaInfo.bitrateFormatted) fileLine.push(mediaInfo.bitrateFormatted);
+  if (mediaInfo.sizeFormatted) fileLine.push(mediaInfo.sizeFormatted);
+  if (fileLine.length > 0) lines.push(fileLine.join(" • "));
+
+  return lines.join("\\n") || "Direct Play";
+}
+
+function parseInputId(id, type) {
+  let cleanId = String(id || "").trim();
+  let targetSeason = null;
+  let targetEpisode = null;
+
+  if (cleanId.includes(":")) {
+    const parts = cleanId.split(":");
+    cleanId = parts[0];
+    if (parts[1]) targetSeason = parseInt(parts[1], 10) || null;
+    if (parts[2]) targetEpisode = parseInt(parts[2], 10) || null;
+  }
+
+  if (cleanId.toLowerCase().startsWith("tmdb:")) {
+    cleanId = cleanId.substring(5).trim();
+  }
+
+  const isImdb = cleanId.startsWith("tt");
+  const mediaType = (type === "series" || type === "tv" || targetSeason !== null) ? "tv" : "movie";
+
+  return { cleanId, isImdb, mediaType, targetSeason, targetEpisode };
+}
+
+// Emby API & Stream Resolver
+async function resolveEmbyStreams(userConfig, type, rawId) {
+  let serverUrl = (userConfig.serverUrl || "").trim().replace(/\\/+$/, '');
+  const username = (userConfig.username || "").trim();
+  const password = userConfig.password || "";
+  let apiKey = userConfig.apiKey || "";
+  let userId = userConfig.userId || "";
+
+  if (!serverUrl) return [];
+  if (!serverUrl.startsWith("http://") && !serverUrl.startsWith("https://")) {
+    serverUrl = "http://" + serverUrl;
+  }
+
+  // 1. Authenticate if username provided
+  if (username) {
+    try {
+      const authRes = await fetch(\`\${serverUrl}/Users/AuthenticateByName\`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Emby-Authorization": 'MediaBrowser Client="Nuvio Stream Resolver", Device="Serverless", DeviceId="nuvio-stream", Version="3.5.0"'
+        },
+        body: JSON.stringify({ Username: username, Pw: password })
+      });
+      if (authRes.ok) {
+        const authData = await authRes.json();
+        apiKey = authData.AccessToken || apiKey;
+        userId = (authData.User && authData.User.Id) || userId;
+      }
+    } catch (e) {}
+  }
+
+  if (!apiKey) return [];
+
+  const idInfo = parseInputId(rawId, type);
+  const isSeries = idInfo.mediaType === "tv";
+  const itemType = isSeries ? "Series" : "Movie";
+
+  // 2. Search item by ProviderId
+  let matchedItem = null;
+  const providerFormats = idInfo.isImdb
+    ? [\`imdb.\${idInfo.cleanId}\`, \`Imdb.\${idInfo.cleanId}\`]
+    : [\`tmdb.\${idInfo.cleanId}\`, \`Tmdb.\${idInfo.cleanId}\`];
+
+  for (const prefix of ['', '/emby']) {
+    if (matchedItem) break;
+    for (const pId of providerFormats) {
+      const url = \`\${serverUrl}\${prefix}/Users/\${userId}/Items?AnyProviderIdEquals=\${encodeURIComponent(pId)}&IncludeItemTypes=\${itemType}&Recursive=true&Fields=ProviderIds,Name,Id,MediaSources&api_key=\${encodeURIComponent(apiKey)}\`;
+      try {
+        const r = await fetch(url, { headers: { 'Accept': 'application/json', 'X-Emby-Token': apiKey } });
+        if (r.ok) {
+          const d = await r.json();
+          if (d && Array.isArray(d.Items) && d.Items.length > 0) {
+            matchedItem = d.Items[0];
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  // Fallback: search /Items
+  if (!matchedItem) {
+    for (const pId of providerFormats) {
+      const url = \`\${serverUrl}/Items?AnyProviderIdEquals=\${encodeURIComponent(pId)}&IncludeItemTypes=\${itemType}&Recursive=true&Fields=ProviderIds,Name,Id,MediaSources&api_key=\${encodeURIComponent(apiKey)}\`;
+      try {
+        const r = await fetch(url, { headers: { 'Accept': 'application/json', 'X-Emby-Token': apiKey } });
+        if (r.ok) {
+          const d = await r.json();
+          if (d && Array.isArray(d.Items) && d.Items.length > 0) {
+            matchedItem = d.Items[0];
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  if (!matchedItem) return [];
+
+  // 3. If Series, find target episode
+  let targetItemId = matchedItem.Id;
+  if (isSeries && idInfo.targetSeason && idInfo.targetEpisode) {
+    try {
+      const seasonsUrl = \`\${serverUrl}/Shows/\${matchedItem.Id}/Seasons?UserId=\${encodeURIComponent(userId)}&api_key=\${encodeURIComponent(apiKey)}\`;
+      const sRes = await fetch(seasonsUrl, { headers: { 'Accept': 'application/json', 'X-Emby-Token': apiKey } });
+      if (sRes.ok) {
+        const sData = await sRes.json();
+        const season = (sData.Items || []).find(s => s.IndexNumber === idInfo.targetSeason);
+        if (season) {
+          const epUrl = \`\${serverUrl}/Shows/\${matchedItem.Id}/Episodes?SeasonId=\${encodeURIComponent(season.Id)}&UserId=\${encodeURIComponent(userId)}&Fields=MediaSources,Name,Id,IndexNumber,ParentIndexNumber&api_key=\${encodeURIComponent(apiKey)}\`;
+          const epRes = await fetch(epUrl, { headers: { 'Accept': 'application/json', 'X-Emby-Token': apiKey } });
+          if (epRes.ok) {
+            const epData = await epRes.json();
+            const episode = (epData.Items || []).find(ep => ep.IndexNumber === idInfo.targetEpisode && ep.ParentIndexNumber === idInfo.targetSeason);
+            if (episode) targetItemId = episode.Id;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 4. Get PlaybackInfo
+  let sources = [];
+  try {
+    const pbRes = await fetch(\`\${serverUrl}/Items/\${targetItemId}/PlaybackInfo?api_key=\${encodeURIComponent(apiKey)}&UserId=\${encodeURIComponent(userId)}\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Emby-Token': apiKey },
+      body: JSON.stringify({ UserId: userId, StartTimeTicks: 0, IsPlayback: false })
+    });
+    if (pbRes.ok) {
+      const pbData = await pbRes.json();
+      if (pbData && Array.isArray(pbData.MediaSources)) sources = pbData.MediaSources;
+    }
+  } catch (e) {}
+
+  if (sources.length === 0) return [];
+
+  // 5. Sort sources: Quality first (4K > 1440p > 1080p > 720p), then Size descending
+  const resOrder = { "4K": 1, "1440p": 2, "1080p": 3, "720p": 4, "576p": 5, "480p": 6, "SD": 7, "Unknown": 8 };
+  sources.sort((a, b) => {
+    const vA = (a.MediaStreams || []).find(s => s.Type === "Video");
+    const vB = (b.MediaStreams || []).find(s => s.Type === "Video");
+    const qA = getQualityTag(vA);
+    const qB = getQualityTag(vB);
+    const rA = resOrder[qA] !== undefined ? resOrder[qA] : 10;
+    const rB = resOrder[qB] !== undefined ? resOrder[qB] : 10;
+    if (rA !== rB) return rA - rB;
+
+    const sizeA = Number(a.Size) || Number(a.Bitrate) || 0;
+    const sizeB = Number(b.Size) || Number(b.Bitrate) || 0;
+    return sizeB - sizeA;
+  });
+
+  // 6. Map to Stremio Addon Streams
+  return sources.map(source => {
+    const mediaStreams = source.MediaStreams || [];
+    const videoStream = mediaStreams.find(s => s.Type === "Video");
+    const audioStream = mediaStreams.find(s => s.Type === "Audio" && s.IsDefault)
+                     || mediaStreams.find(s => s.Type === "Audio");
+
+    const qualityTag = getQualityTag(videoStream);
+    const dimensions = getResolutionDimensions(videoStream);
+    const hdrTag = getHdrTag(videoStream);
+    const videoTag = getVideoTag(videoStream);
+    const isRemuxSource = isRemux(source);
+    const audioTag = getAudioTag(audioStream);
+    const container = (source.Container || "mp4").toUpperCase();
+    const bitrateFormatted = formatBitrate(source.Bitrate || (videoStream && videoStream.BitRate));
+    const sizeFormatted = formatFileSize(source.Size);
+
+    const mediaInfo = {
+      qualityTag,
+      resolutionDimensions: dimensions,
+      hdrTag,
+      videoTag,
+      isRemux: isRemuxSource,
+      audioTag,
+      container,
+      bitrateFormatted,
+      sizeFormatted
+    };
+
+    const streamDescription = buildStreamDescription(mediaInfo);
+    const filename = source.Path ? source.Path.split(/[\\\\/]/).pop() : (source.Name || "stream");
+    const streamUrl = \`\${serverUrl}/emby/Videos/\${targetItemId}/stream.\${container.toLowerCase()}?static=true&MediaSourceId=\${encodeURIComponent(source.Id)}&api_key=\${encodeURIComponent(apiKey)}\`;
+
+    // Extract subtitles
+    const subtitles = [];
+    const subStreams = mediaStreams.filter(s => s.Type === "Subtitle");
+    for (const sub of subStreams) {
+      const subIndex = sub.Index;
+      const subUrl = \`\${serverUrl}/emby/Videos/\${targetItemId}/\${source.Id}/Subtitles/\${subIndex}/Stream.vtt?api_key=\${encodeURIComponent(apiKey)}\`;
+      subtitles.push({
+        id: \`sub-\${subIndex}\`,
+        url: subUrl,
+        lang: sub.Language || "und"
+      });
+    }
+
+    return {
+      name: "Emby",
+      title: streamDescription,
+      description: streamDescription,
+      url: streamUrl,
+      behaviorHints: {
+        filename: filename,
+        videoSize: Number(source.Size) || undefined,
+        notWebReady: true,
+        bingeGroup: \`Emby-\${(qualityTag || "Direct Play").trim()}\`
+      },
+      subtitles: subtitles
+    };
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -833,7 +1169,6 @@ export default {
           serverUrl = 'http://' + serverUrl;
         }
 
-        // Test server public info
         let info = null;
         let effectivePrefix = '';
         for (const prefix of ['', '/emby']) {
@@ -859,7 +1194,6 @@ export default {
           });
         }
 
-        // Test User Authentication if username provided
         let authResult = null;
         if (username) {
           try {
@@ -943,7 +1277,39 @@ export default {
       });
     }
 
-    // 4. Dynamic Path with Config: /:config/manifest.json or /:config/(providers/)?emby.js
+    // 4. Stremio Addon Stream Resolution: /:config/stream/:type/:id.json
+    const streamMatch = pathname.match(/^\\/([^\\/]+)\\/stream\\/([^\\/]+)\\/([^\\/]+)\\.json$/);
+    if (streamMatch) {
+      const configToken = streamMatch[1];
+      const streamType = streamMatch[2];
+      const rawId = decodeURIComponent(streamMatch[3]);
+
+      const userConfig = decodeBase64Url(configToken);
+      if (!userConfig) {
+        return new Response(JSON.stringify({ streams: [] }), {
+          status: 400,
+          headers: corsHeaders({ 'Content-Type': 'application/json; charset=utf-8' })
+        });
+      }
+
+      try {
+        const streams = await resolveEmbyStreams(userConfig, streamType, rawId);
+        return new Response(JSON.stringify({ streams }), {
+          status: 200,
+          headers: corsHeaders({
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'public, max-age=120'
+          })
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ streams: [] }), {
+          status: 200,
+          headers: corsHeaders({ 'Content-Type': 'application/json; charset=utf-8' })
+        });
+      }
+    }
+
+    // 5. Dynamic Path with Config: /:config/manifest.json or /:config/(providers/)?emby.js
     const pathParts = pathname.split('/').filter(Boolean);
     if (pathParts.length >= 2) {
       const configToken = pathParts[0];
@@ -957,14 +1323,14 @@ export default {
         });
       }
 
-      // Personalized Manifest
+      // Personalized Manifest (Stremio + Nuvio Scraper)
       if (remainingPath === 'manifest.json') {
         const customManifest = JSON.parse(JSON.stringify(BASE_MANIFEST));
         if (userConfig.username) {
-          customManifest.name = \`Nuvio Emby (\${userConfig.username})\`;
+          customManifest.name = \`Emby (\${userConfig.username})\`;
         }
         if (customManifest.scrapers && customManifest.scrapers.length > 0) {
-          customManifest.scrapers[0].hasSettings = false; // Already pre-configured!
+          customManifest.scrapers[0].hasSettings = false;
           if (userConfig.serverUrl) {
             customManifest.scrapers[0].description = \`Emby (\${userConfig.serverUrl})\`;
           }
