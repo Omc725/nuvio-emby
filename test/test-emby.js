@@ -658,6 +658,263 @@ async function runTests() {
     console.log("✓ Test 11 Passed!\n");
   }
 
+  // TEST 12: Native Jellyfin Server Auto-Detection & Movie Stream Resolution
+  {
+    console.log("Test 12: Native Jellyfin server auto-detection and movie stream resolution...");
+    const mockJellyfinUrl = "http://jellyfin.local:8096";
+    const mockJellyfinKey = "jelly_token_xyz";
+    const mockJellyfinUser = "jelly_user_123";
+
+    const mockFetch = async (url, options = {}) => {
+      const urlStr = String(url);
+
+      // System/Info/Public endpoint returns Jellyfin Server
+      if (urlStr === `${mockJellyfinUrl}/System/Info/Public`) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ServerName: "My Home Jellyfin",
+            Version: "10.9.11",
+            ProductName: "Jellyfin Server"
+          })
+        };
+      }
+
+      // Jellyfin items endpoint (WITHOUT /emby)
+      if (urlStr.includes(`${mockJellyfinUrl}/Users/${mockJellyfinUser}/Items?AnyProviderIdEquals=imdb.tt1375666`)) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            Items: [{ Id: "jelly_inception", Name: "Inception" }]
+          })
+        };
+      }
+
+      // Jellyfin PlaybackInfo endpoint (WITHOUT /emby)
+      if (urlStr.includes(`${mockJellyfinUrl}/Items/jelly_inception/PlaybackInfo`)) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            MediaSources: [
+              {
+                Id: "jelly_source_4k",
+                Bitrate: 45000000,
+                Size: 32000000000,
+                MediaStreams: [
+                  { Type: "Video", Codec: "hevc", Height: 2160, Width: 3840, VideoRange: "HDR" },
+                  { Type: "Audio", Codec: "dts", DisplayTitle: "DTS-HD MA 5.1", Channels: 6 },
+                  { Type: "Subtitle", Index: 1, Codec: "subrip", Language: "tur", DisplayTitle: "Türkçe" }
+                ]
+              }
+            ]
+          })
+        };
+      }
+
+      throw new Error(`Unexpected Jellyfin mock URL: ${urlStr}`);
+    };
+
+    global.SCRAPER_SETTINGS = {
+      serverUrl: mockJellyfinUrl,
+      apiKey: mockJellyfinKey,
+      userId: mockJellyfinUser
+    };
+
+    const provider = loadProvider(mockFetch);
+    const streams = await provider.getStreams("tt1375666", "movie");
+
+    assert.strictEqual(streams.length, 1, "Should return 1 Jellyfin stream");
+    const s = streams[0];
+    assert.strictEqual(s.name, "Jellyfin", "Stream name must be 'Jellyfin'");
+    assert.strictEqual(s.provider, "jellyfin", "Provider field must be 'jellyfin'");
+    assert.strictEqual(s.quality, "4K", "Quality should be 4K");
+    assert.strictEqual(s.headers["X-MediaBrowser-Token"], mockJellyfinKey, "Should contain X-MediaBrowser-Token");
+    assert.strictEqual(s.headers["X-Emby-Token"], mockJellyfinKey, "Should contain X-Emby-Token");
+    assert(s.url.startsWith(`${mockJellyfinUrl}/Videos/jelly_inception/stream.`), "Stream URL must NOT contain /emby");
+    assert(s.subtitles[0].url.startsWith(`${mockJellyfinUrl}/Videos/jelly_inception/jelly_source_4k/Subtitles/`), "Subtitle URL must NOT contain /emby");
+    assert.strictEqual(s.behaviorHints.bingeGroup, "Jellyfin-4K");
+
+    delete global.SCRAPER_SETTINGS;
+    console.log("✓ Test 12 Passed!\n");
+  }
+
+  // TEST 13: Jellyfin Series and Episode Stream Resolution
+  {
+    console.log("Test 13: Jellyfin series and episode stream resolution...");
+    const mockJellyfinUrl = "http://jellyfin.local:8096";
+    const mockJellyfinKey = "jelly_token_xyz";
+    const mockJellyfinUser = "jelly_user_123";
+
+    const mockFetch = async (url, options = {}) => {
+      const urlStr = String(url);
+
+      if (urlStr === `${mockJellyfinUrl}/System/Info/Public`) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ServerName: "My Home Jellyfin",
+            Version: "10.9.11",
+            ProductName: "Jellyfin Server"
+          })
+        };
+      }
+
+      // Series search at /Users/.../Items
+      if (urlStr.includes(`${mockJellyfinUrl}/Users/${mockJellyfinUser}/Items?AnyProviderIdEquals=tmdb.94605`)) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            Items: [{ Id: "jelly_arcane", Name: "Arcane" }]
+          })
+        };
+      }
+
+      // Shows/.../Episodes at root (WITHOUT /emby)
+      if (urlStr.includes(`${mockJellyfinUrl}/Shows/jelly_arcane/Episodes`)) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            Items: [
+              { Id: "jelly_ep_1", IndexNumber: 1, ParentIndexNumber: 1, Name: "Welcome to the Playground" },
+              { Id: "jelly_ep_2", IndexNumber: 2, ParentIndexNumber: 1, Name: "Some Mysteries Are Better Left Unsolved" }
+            ]
+          })
+        };
+      }
+
+      // PlaybackInfo for Episode 2
+      if (urlStr.includes(`${mockJellyfinUrl}/Items/jelly_ep_2/PlaybackInfo`)) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            MediaSources: [
+              {
+                Id: "jelly_arcane_e2_src",
+                MediaStreams: [
+                  { Type: "Video", Codec: "hevc", Height: 1080, Width: 1920 },
+                  { Type: "Audio", Codec: "eac3", Channels: 6 }
+                ]
+              }
+            ]
+          })
+        };
+      }
+
+      throw new Error(`Unexpected Jellyfin mock URL: ${urlStr}`);
+    };
+
+    global.SCRAPER_SETTINGS = {
+      serverUrl: mockJellyfinUrl,
+      apiKey: mockJellyfinKey,
+      userId: mockJellyfinUser
+    };
+
+    const provider = loadProvider(mockFetch);
+    const streams = await provider.getStreams("94605", "tv", 1, 2);
+
+    assert.strictEqual(streams.length, 1, "Should return 1 stream for S01E02 on Jellyfin");
+    assert.strictEqual(streams[0].name, "Jellyfin");
+    assert.strictEqual(streams[0].quality, "1080p");
+    assert(streams[0].url.startsWith(`${mockJellyfinUrl}/Videos/jelly_ep_2/stream.`));
+    assert(!streams[0].url.includes("/emby/Videos/"));
+
+    delete global.SCRAPER_SETTINGS;
+    console.log("✓ Test 13 Passed!\n");
+  }
+
+  // TEST 14: Jellyfin Username & Password Authentication Flow
+  {
+    console.log("Test 14: Jellyfin username & password authentication flow...");
+    const mockJellyfinUrl = "http://jellyfin.local:8096";
+    let authEndpointCalled = false;
+
+    const mockFetch = async (url, options = {}) => {
+      const urlStr = String(url);
+
+      if (urlStr === `${mockJellyfinUrl}/Users/AuthenticateByName`) {
+        authEndpointCalled = true;
+        const body = JSON.parse(options.body);
+        assert.strictEqual(body.Username, "jellyuser");
+        assert.strictEqual(body.Pw, "jellypass");
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            AccessToken: "jelly_authed_token_abc",
+            User: { Id: "jelly_authed_user_def", Name: "jellyuser" }
+          })
+        };
+      }
+
+      if (urlStr === `${mockJellyfinUrl}/System/Info/Public`) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ServerName: "My Jellyfin",
+            ProductName: "Jellyfin Server"
+          })
+        };
+      }
+
+      if (urlStr.includes(`${mockJellyfinUrl}/Users/jelly_authed_user_def/Items`)) {
+        assert(urlStr.includes("api_key=jelly_authed_token_abc"));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            Items: [{ Id: "jelly_auth_item" }]
+          })
+        };
+      }
+
+      if (urlStr.includes(`${mockJellyfinUrl}/Items/jelly_auth_item/PlaybackInfo`)) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            MediaSources: [
+              {
+                Id: "src_jelly_auth",
+                MediaStreams: [{ Type: "Video", Height: 1080, Width: 1920 }]
+              }
+            ]
+          })
+        };
+      }
+
+      throw new Error(`Unexpected URL in Test 14: ${urlStr}`);
+    };
+
+    global.SCRAPER_SETTINGS = {
+      serverUrl: mockJellyfinUrl,
+      username: "jellyuser",
+      password: "jellypass",
+      apiKey: "",
+      userId: ""
+    };
+
+    const provider = loadProvider(mockFetch);
+    const streams = await provider.getStreams(550, "movie");
+
+    assert.strictEqual(authEndpointCalled, true, "Must call /Users/AuthenticateByName directly");
+    assert.strictEqual(streams.length, 1);
+    assert.strictEqual(streams[0].name, "Jellyfin");
+    assert.strictEqual(streams[0].headers["X-MediaBrowser-Token"], "jelly_authed_token_abc");
+    assert(streams[0].url.includes("api_key=jelly_authed_token_abc"));
+    assert(!streams[0].url.includes("/emby/"));
+
+    delete global.SCRAPER_SETTINGS;
+    console.log("✓ Test 14 Passed!\n");
+  }
+
   console.log("🎉 ALL TESTS PASSED SUCCESSFULLY!");
 }
 

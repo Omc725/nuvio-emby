@@ -27,9 +27,9 @@ const scraperManifestContent = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8')
 // Unified Manifest: Supports BOTH Stremio Addon (for rich multi-line card + BOYUT badge) AND Local Scraper
 const UNIFIED_MANIFEST = {
   id: "org.omc725.nuvioemby",
-  name: "Emby",
+  name: "Emby / Jellyfin",
   version: "3.5.0",
-  description: "Nuvio & Stremio doğrudan oynatma (Direct Play) eklentisi",
+  description: "Nuvio & Stremio doğrudan oynatma (Direct Play) eklentisi (Emby & Jellyfin)",
   logo: "https://emby.media/images/embyicon.png",
   resources: ["stream"],
   types: ["movie", "series", "tv"],
@@ -48,7 +48,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nuvio Emby - Kişisel Eklenti Yapılandırıcı</title>
+  <title>Nuvio Emby & Jellyfin - Kişisel Eklenti Yapılandırıcı</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -419,14 +419,14 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       <div class="badge-row">
         <div class="badge">
           <span class="badge-dot"></span>
-          Emby v3.5.0
+          Emby & Jellyfin v3.5.0
         </div>
         <div class="badge">
           Nuvio & Stremio Direct Play
         </div>
       </div>
-      <h1>Nuvio Emby Yapılandırıcı</h1>
-      <p class="subtitle">Emby sunucunuzu bağlayın; Nuvio için zengin kart ve BOYUT rozeti destekli manifestinizi üretin.</p>
+      <h1>Nuvio Emby & Jellyfin Yapılandırıcı</h1>
+      <p class="subtitle">Emby veya Jellyfin sunucunuzu bağlayın; Nuvio için zengin kart ve BOYUT rozeti destekli manifestinizi üretin.</p>
     </div>
 
     <!-- Yapılandırma Formu -->
@@ -434,18 +434,18 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       <form id="configForm" onsubmit="return false;">
         <div class="form-group">
           <label for="serverUrl">
-            Emby Sunucu Adresi
-            <span class="label-hint">Örn: https://emby.myserver.com</span>
+            Emby / Jellyfin Sunucu Adresi
+            <span class="label-hint">Örn: http://192.168.1.100:8096 veya https://jellyfin.alanadi.com</span>
           </label>
           <div class="input-wrapper">
-            <input type="text" id="serverUrl" placeholder="http://192.168.1.100:8096 veya https://emby.alanadi.com" required autocomplete="off">
+            <input type="text" id="serverUrl" placeholder="http://192.168.1.100:8096 veya https://jellyfin.alanadi.com" required autocomplete="off">
           </div>
         </div>
 
         <div class="form-group">
           <label for="username">
             Kullanıcı Adı
-            <span class="label-hint">Emby kullanıcı adınız</span>
+            <span class="label-hint">Emby veya Jellyfin kullanıcı adınız</span>
           </label>
           <div class="input-wrapper">
             <input type="text" id="username" placeholder="Örn: Oguz" required autocomplete="username">
@@ -618,7 +618,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       testIcon.innerHTML = '<span class="spinner"></span>';
       testText.textContent = 'Test Ediliyor...';
       btnTest.disabled = true;
-      showStatus('info', 'Emby sunucusu ile bağlantı kuruluyor...');
+      showStatus('info', 'Emby / Jellyfin sunucusu ile bağlantı kuruluyor...');
 
       try {
         const resp = await fetch('/api/test-connection', {
@@ -629,7 +629,8 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
 
         const res = await resp.json();
         if (res.ok) {
-          showStatus('success', '✅ <strong>Bağlantı Başarılı!</strong> Sunucu: ' + (res.serverName || 'Emby') + ' (v' + (res.version || 'Bilinmiyor') + '), Kullanıcı: ' + (res.userName || data.username));
+          const typeLabel = res.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby';
+          showStatus('success', '✅ <strong>Bağlantı Başarılı!</strong> Sunucu: ' + (res.serverName || typeLabel) + ' (' + (res.productName || typeLabel) + ' v' + (res.version || 'Bilinmiyor') + '), Kullanıcı: ' + (res.userName || data.username));
         } else {
           showStatus('error', '❌ <strong>Bağlantı Başarısız:</strong> ' + (res.error || 'Sunucuya erişilemedi.'));
         }
@@ -944,7 +945,7 @@ function parseInputId(id, type) {
   return { cleanId, isImdb, mediaType, targetSeason, targetEpisode };
 }
 
-// Emby API & Stream Resolver
+// Emby & Jellyfin API & Stream Resolver
 async function resolveEmbyStreams(userConfig, type, rawId) {
   let serverUrl = (userConfig.serverUrl || "").trim().replace(/\\/+$/, '');
   const username = (userConfig.username || "").trim();
@@ -957,23 +958,55 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
     serverUrl = "http://" + serverUrl;
   }
 
-  // 1. Authenticate if username provided
-  if (username) {
+  // Detect server info (Jellyfin vs Emby)
+  let effectivePrefix = '';
+  let serverType = 'emby';
+
+  for (const prefix of ['', '/emby']) {
     try {
-      const authRes = await fetch(\`\${serverUrl}/Users/AuthenticateByName\`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Emby-Authorization": 'MediaBrowser Client="Nuvio Stream Resolver", Device="Serverless", DeviceId="nuvio-stream", Version="3.5.0"'
-        },
-        body: JSON.stringify({ Username: username, Pw: password })
+      const r = await fetch(\`\${serverUrl}\${prefix}/System/Info/Public\`, {
+        headers: { 'Accept': 'application/json' }
       });
-      if (authRes.ok) {
-        const authData = await authRes.json();
-        apiKey = authData.AccessToken || apiKey;
-        userId = (authData.User && authData.User.Id) || userId;
+      if (r.ok) {
+        const info = await r.json();
+        effectivePrefix = prefix;
+        const prod = ((info && (info.ProductName || info.ServerName)) || '').toLowerCase();
+        if (prod.includes('jellyfin')) {
+          serverType = 'jellyfin';
+          effectivePrefix = '';
+        }
+        break;
       }
     } catch (e) {}
+  }
+
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    'X-Emby-Authorization': 'MediaBrowser Client="Nuvio Stream Resolver", Device="Serverless", DeviceId="nuvio-stream", Version="3.5.0"',
+    'Authorization': 'MediaBrowser Client="Nuvio Stream Resolver", Device="Serverless", DeviceId="nuvio-stream", Version="3.5.0"'
+  };
+
+  // 1. Authenticate if username provided
+  if (username) {
+    const authEndpoints = [\`\${serverUrl}\${effectivePrefix}/Users/AuthenticateByName\`];
+    if (effectivePrefix !== '') authEndpoints.push(\`\${serverUrl}/Users/AuthenticateByName\`);
+    else authEndpoints.push(\`\${serverUrl}/emby/Users/AuthenticateByName\`);
+
+    for (const aUrl of authEndpoints) {
+      try {
+        const authRes = await fetch(aUrl, {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({ Username: username, Pw: password })
+        });
+        if (authRes.ok) {
+          const authData = await authRes.json();
+          apiKey = authData.AccessToken || apiKey;
+          userId = (authData.User && authData.User.Id) || userId;
+          break;
+        }
+      } catch (e) {}
+    }
   }
 
   if (!apiKey) return [];
@@ -982,18 +1015,25 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
   const isSeries = idInfo.mediaType === "tv";
   const itemType = isSeries ? "Series" : "Movie";
 
+  const apiHeaders = {
+    'Accept': 'application/json',
+    'X-Emby-Token': apiKey,
+    'X-MediaBrowser-Token': apiKey,
+    'Authorization': \`MediaBrowser Token="\${apiKey}"\`
+  };
+
   // 2. Search item by ProviderId
   let matchedItem = null;
   const providerFormats = idInfo.isImdb
     ? [\`imdb.\${idInfo.cleanId}\`, \`Imdb.\${idInfo.cleanId}\`]
     : [\`tmdb.\${idInfo.cleanId}\`, \`Tmdb.\${idInfo.cleanId}\`];
 
-  for (const prefix of ['', '/emby']) {
+  for (const prefix of [effectivePrefix, effectivePrefix === '' ? '/emby' : '']) {
     if (matchedItem) break;
     for (const pId of providerFormats) {
       const url = \`\${serverUrl}\${prefix}/Users/\${userId}/Items?AnyProviderIdEquals=\${encodeURIComponent(pId)}&IncludeItemTypes=\${itemType}&Recursive=true&Fields=ProviderIds,Name,Id,MediaSources&api_key=\${encodeURIComponent(apiKey)}\`;
       try {
-        const r = await fetch(url, { headers: { 'Accept': 'application/json', 'X-Emby-Token': apiKey } });
+        const r = await fetch(url, { headers: apiHeaders });
         if (r.ok) {
           const d = await r.json();
           if (d && Array.isArray(d.Items) && d.Items.length > 0) {
@@ -1010,7 +1050,7 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
     for (const pId of providerFormats) {
       const url = \`\${serverUrl}/Items?AnyProviderIdEquals=\${encodeURIComponent(pId)}&IncludeItemTypes=\${itemType}&Recursive=true&Fields=ProviderIds,Name,Id,MediaSources&api_key=\${encodeURIComponent(apiKey)}\`;
       try {
-        const r = await fetch(url, { headers: { 'Accept': 'application/json', 'X-Emby-Token': apiKey } });
+        const r = await fetch(url, { headers: apiHeaders });
         if (r.ok) {
           const d = await r.json();
           if (d && Array.isArray(d.Items) && d.Items.length > 0) {
@@ -1028,14 +1068,14 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
   let targetItemId = matchedItem.Id;
   if (isSeries && idInfo.targetSeason && idInfo.targetEpisode) {
     try {
-      const seasonsUrl = \`\${serverUrl}/Shows/\${matchedItem.Id}/Seasons?UserId=\${encodeURIComponent(userId)}&api_key=\${encodeURIComponent(apiKey)}\`;
-      const sRes = await fetch(seasonsUrl, { headers: { 'Accept': 'application/json', 'X-Emby-Token': apiKey } });
+      const seasonsUrl = \`\${serverUrl}\${effectivePrefix}/Shows/\${matchedItem.Id}/Seasons?UserId=\${encodeURIComponent(userId)}&api_key=\${encodeURIComponent(apiKey)}\`;
+      const sRes = await fetch(seasonsUrl, { headers: apiHeaders });
       if (sRes.ok) {
         const sData = await sRes.json();
         const season = (sData.Items || []).find(s => s.IndexNumber === idInfo.targetSeason);
         if (season) {
-          const epUrl = \`\${serverUrl}/Shows/\${matchedItem.Id}/Episodes?SeasonId=\${encodeURIComponent(season.Id)}&UserId=\${encodeURIComponent(userId)}&Fields=MediaSources,Name,Id,IndexNumber,ParentIndexNumber&api_key=\${encodeURIComponent(apiKey)}\`;
-          const epRes = await fetch(epUrl, { headers: { 'Accept': 'application/json', 'X-Emby-Token': apiKey } });
+          const epUrl = \`\${serverUrl}\${effectivePrefix}/Shows/\${matchedItem.Id}/Episodes?SeasonId=\${encodeURIComponent(season.Id)}&UserId=\${encodeURIComponent(userId)}&Fields=MediaSources,Name,Id,IndexNumber,ParentIndexNumber&api_key=\${encodeURIComponent(apiKey)}\`;
+          const epRes = await fetch(epUrl, { headers: apiHeaders });
           if (epRes.ok) {
             const epData = await epRes.json();
             const episode = (epData.Items || []).find(ep => ep.IndexNumber === idInfo.targetEpisode && ep.ParentIndexNumber === idInfo.targetSeason);
@@ -1049,9 +1089,9 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
   // 4. Get PlaybackInfo
   let sources = [];
   try {
-    const pbRes = await fetch(\`\${serverUrl}/Items/\${targetItemId}/PlaybackInfo?api_key=\${encodeURIComponent(apiKey)}&UserId=\${encodeURIComponent(userId)}\`, {
+    const pbRes = await fetch(\`\${serverUrl}\${effectivePrefix}/Items/\${targetItemId}/PlaybackInfo?api_key=\${encodeURIComponent(apiKey)}&UserId=\${encodeURIComponent(userId)}\`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Emby-Token': apiKey },
+      headers: Object.assign({ 'Content-Type': 'application/json' }, apiHeaders),
       body: JSON.stringify({ UserId: userId, StartTimeTicks: 0, IsPlayback: false })
     });
     if (pbRes.ok) {
@@ -1079,6 +1119,8 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
   });
 
   // 6. Map to Stremio Addon Streams
+  const streamProviderName = serverType === 'jellyfin' ? 'Jellyfin' : 'Emby';
+
   return sources.map(source => {
     const mediaStreams = source.MediaStreams || [];
     const videoStream = mediaStreams.find(s => s.Type === "Video");
@@ -1109,14 +1151,14 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
 
     const streamDescription = buildStreamDescription(mediaInfo);
     const filename = source.Path ? source.Path.split(/[\\\\/]/).pop() : (source.Name || "stream");
-    const streamUrl = \`\${serverUrl}/emby/Videos/\${targetItemId}/stream.\${container.toLowerCase()}?static=true&MediaSourceId=\${encodeURIComponent(source.Id)}&api_key=\${encodeURIComponent(apiKey)}\`;
+    const streamUrl = \`\${serverUrl}\${effectivePrefix}/Videos/\${targetItemId}/stream.\${container.toLowerCase()}?static=true&MediaSourceId=\${encodeURIComponent(source.Id)}&api_key=\${encodeURIComponent(apiKey)}\`;
 
     // Extract subtitles
     const subtitles = [];
     const subStreams = mediaStreams.filter(s => s.Type === "Subtitle");
     for (const sub of subStreams) {
       const subIndex = sub.Index;
-      const subUrl = \`\${serverUrl}/emby/Videos/\${targetItemId}/\${source.Id}/Subtitles/\${subIndex}/Stream.vtt?api_key=\${encodeURIComponent(apiKey)}\`;
+      const subUrl = \`\${serverUrl}\${effectivePrefix}/Videos/\${targetItemId}/\${source.Id}/Subtitles/\${subIndex}/Stream.vtt?api_key=\${encodeURIComponent(apiKey)}\`;
       subtitles.push({
         id: \`sub-\${subIndex}\`,
         url: subUrl,
@@ -1125,7 +1167,7 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
     }
 
     return {
-      name: "Emby",
+      name: streamProviderName,
       title: streamDescription,
       description: streamDescription,
       url: streamUrl,
@@ -1133,7 +1175,7 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
         filename: filename,
         videoSize: Number(source.Size) || undefined,
         notWebReady: true,
-        bingeGroup: \`Emby-\${(qualityTag || "Direct Play").trim()}\`
+        bingeGroup: \`\${streamProviderName}-\${(qualityTag || "Direct Play").trim()}\`
       },
       subtitles: subtitles
     };
@@ -1171,6 +1213,8 @@ export default {
 
         let info = null;
         let effectivePrefix = '';
+        let serverType = 'emby';
+
         for (const prefix of ['', '/emby']) {
           try {
             const r = await fetch(\`\${serverUrl}\${prefix}/System/Info/Public\`, {
@@ -1179,6 +1223,11 @@ export default {
             if (r.ok) {
               info = await r.json();
               effectivePrefix = prefix;
+              const prod = ((info && (info.ProductName || info.ServerName)) || '').toLowerCase();
+              if (prod.includes('jellyfin')) {
+                serverType = 'jellyfin';
+                effectivePrefix = '';
+              }
               break;
             }
           } catch (e) {}
@@ -1187,7 +1236,7 @@ export default {
         if (!info) {
           return new Response(JSON.stringify({
             ok: false,
-            error: 'Emby sunucusuna bağlanılamadı. Adresi (ve varsa port numarasını) kontrol edin.'
+            error: 'Emby / Jellyfin sunucusuna bağlanılamadı. Adresi (ve varsa port numarasını) kontrol edin.'
           }), {
             status: 200,
             headers: corsHeaders({ 'Content-Type': 'application/json; charset=utf-8' })
@@ -1196,31 +1245,33 @@ export default {
 
         let authResult = null;
         if (username) {
-          try {
-            const authRes = await fetch(\`\${serverUrl}\${effectivePrefix}/Users/AuthenticateByName\`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Emby-Authorization': 'MediaBrowser Client="Nuvio Configurator", Device="Web", DeviceId="nuvio-worker-test", Version="3.5.0"'
-              },
-              body: JSON.stringify({ Username: username, Pw: password })
-            });
+          const authEndpoints = [\`\${serverUrl}\${effectivePrefix}/Users/AuthenticateByName\`];
+          if (effectivePrefix !== '') authEndpoints.push(\`\${serverUrl}/Users/AuthenticateByName\`);
+          else authEndpoints.push(\`\${serverUrl}/emby/Users/AuthenticateByName\`);
 
-            if (authRes.ok) {
-              authResult = await authRes.json();
-            } else {
-              return new Response(JSON.stringify({
-                ok: false,
-                error: 'Sunucu bulundu ancak kullanıcı adı veya şifre geçersiz (HTTP ' + authRes.status + ').'
-              }), {
-                status: 200,
-                headers: corsHeaders({ 'Content-Type': 'application/json; charset=utf-8' })
+          for (const authUrl of authEndpoints) {
+            try {
+              const authRes = await fetch(authUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Emby-Authorization': 'MediaBrowser Client="Nuvio Configurator", Device="Web", DeviceId="nuvio-worker-test", Version="3.5.0"',
+                  'Authorization': 'MediaBrowser Client="Nuvio Configurator", Device="Web", DeviceId="nuvio-worker-test", Version="3.5.0"'
+                },
+                body: JSON.stringify({ Username: username, Pw: password })
               });
-            }
-          } catch (authErr) {
+
+              if (authRes.ok) {
+                authResult = await authRes.json();
+                break;
+              }
+            } catch (authErr) {}
+          }
+
+          if (!authResult) {
             return new Response(JSON.stringify({
               ok: false,
-              error: 'Kullanıcı doğrulama hatası: ' + authErr.message
+              error: 'Sunucu bulundu ancak kullanıcı adı veya şifre geçersiz.'
             }), {
               status: 200,
               headers: corsHeaders({ 'Content-Type': 'application/json; charset=utf-8' })
@@ -1228,9 +1279,12 @@ export default {
           }
         }
 
+        const serverDisplayName = serverType === 'jellyfin' ? 'Jellyfin Server' : 'Emby Server';
         return new Response(JSON.stringify({
           ok: true,
-          serverName: info.ServerName || 'Emby Server',
+          serverType: serverType,
+          serverName: info.ServerName || serverDisplayName,
+          productName: info.ProductName || serverDisplayName,
           version: info.Version || 'Bilinmiyor',
           userName: authResult && authResult.User ? authResult.User.Name : username
         }), {
@@ -1326,13 +1380,17 @@ export default {
       // Personalized Manifest (Stremio + Nuvio Scraper)
       if (remainingPath === 'manifest.json') {
         const customManifest = JSON.parse(JSON.stringify(BASE_MANIFEST));
+        const displayName = (userConfig.serverType === 'jellyfin' || (userConfig.serverUrl && userConfig.serverUrl.toLowerCase().includes('jellyfin'))) ? 'Jellyfin' : 'Emby';
         if (userConfig.username) {
-          customManifest.name = \`Emby (\${userConfig.username})\`;
+          customManifest.name = \`\${displayName} (\${userConfig.username})\`;
+        } else {
+          customManifest.name = displayName;
         }
         if (customManifest.scrapers && customManifest.scrapers.length > 0) {
           customManifest.scrapers[0].hasSettings = false;
+          customManifest.scrapers[0].name = displayName;
           if (userConfig.serverUrl) {
-            customManifest.scrapers[0].description = \`Emby (\${userConfig.serverUrl})\`;
+            customManifest.scrapers[0].description = \`\${displayName} (\${userConfig.serverUrl})\`;
           }
         }
 

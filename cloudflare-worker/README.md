@@ -1,10 +1,11 @@
-# Nuvio Emby Cloudflare Worker
+# Nuvio Emby & Jellyfin Cloudflare Worker
 
-Nuvio için Emby eklentisini internet üzerinden kişiselleştirilmiş olarak dağıtmanızı sağlayan **ücretsiz, sunucusuz (serverless)** Cloudflare Worker çözümü.
+Nuvio için Emby ve Jellyfin eklentisini internet üzerinden kişiselleştirilmiş olarak dağıtmanızı sağlayan **ücretsiz, sunucusuz (serverless)** Cloudflare Worker çözümü.
 
 Bu servis sayesinde:
-- 📱 Nuvio'ya eklenti kurmadan önce web arayüzünden Emby sunucu adresinizi ve giriş bilgilerinizi girersiniz.
+- 📱 Nuvio'ya eklenti kurmadan önce web arayüzünden Emby veya Jellyfin sunucu adresinizi ve giriş bilgilerinizi girersiniz.
 - ⚡ Size özel, şifrelenmiş bir **Kişisel Manifest URL'si** ve **QR Kod** üretilir.
+- 🔍 Sunucunuzun Emby veya Jellyfin olduğu otomatik tespit edilir ve sürüm bilgisi doğrulanır.
 - 🔒 **Sıfır Günlük & Güvenlik:** Bilgileriniz hiçbir veri tabanında tutulmaz. Yapılandırma doğrudan URL parametresi içinde Base64 olarak taşınır ve Nuvio oynatıcınıza dinamik olarak enjekte edilir.
 
 ---
@@ -44,12 +45,12 @@ Komut tamamlandığında terminal size canlı URL'nizi verecektir (örn: `https:
 
 1. Oluşturulan Worker URL'sini tarayıcınızda açın (örn: `https://nuvio-emby.<kullanici>.workers.dev`).
 2. Açılan modern Türkçe arayüzden:
-   - **Emby Sunucu Adresi:** Sunucunuzun IP veya domain adresi (örn: `https://emby.ornek.com` veya `http://192.168.1.100:8096`)
-   - **Kullanıcı Adı & Şifre:** Emby giriş bilgileriniz
-3. **🔍 Bağlantıyı Test Et** butonuna basarak Emby sunucunuzun erişilebilir olduğunu anında teyit edin.
+   - **Sunucu Adresi:** Emby veya Jellyfin sunucunuzun IP veya domain adresi (örn: `https://media.ornek.com` veya `http://192.168.1.100:8096`)
+   - **Kullanıcı Adı & Şifre:** Sunucu giriş bilgileriniz (veya doğrudan API Anahtarı)
+3. **🔍 Bağlantıyı Test Et** butonuna basarak sunucunuzun erişilebilir olduğunu ve türünü (Emby / Jellyfin) anında teyit edin.
 4. **⚡ Manifest URL'si Üret** butonuna basın.
 5. Üretilen bağlantıyı kopyalayın veya ekrandaki QR kodu telefonunuzla taratın.
 6. **Nuvio** uygulamasında:
    - **Ayarlar (Settings)** > **Eklentiler (Plugins)** > **Eklenti Ekle (Add Plugin)** yolunu izleyin.
    - Kopyaladığınız adresi yapıştırın.
-7. Bitti! Artık Emby kütüphanenizdeki tüm dizi ve filmler Nuvio'da Direct Play ve Türkçe/İngilizce altyazı desteğiyle hazır!
+7. Bitti! Artık Emby veya Jellyfin kütüphanenizdeki tüm dizi ve filmler Nuvio'da Direct Play ve Türkçe/İngilizce altyazı desteğiyle hazır!

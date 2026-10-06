@@ -1,6 +1,6 @@
-# Nuvio Emby Media Provider Plugin
+# Nuvio Emby & Jellyfin Media Provider Plugin
 
-Nuvio medya oynatıcısı için yerel veya uzak Emby sunucularına bağlanarak film ve dizi içeriklerini doğrudan oynatma (Direct Play) bağlantılarıyla getiren bağımsız eklenti (provider) ve Cloudflare Worker servisi.
+Nuvio medya oynatıcısı için yerel veya uzak **Emby** ve **Jellyfin** sunucularına bağlanarak film ve dizi içeriklerini doğrudan oynatma (Direct Play) bağlantılarıyla getiren bağımsız eklenti (provider) ve Cloudflare Worker servisi.
 
 Bu eklenti, Nuvio'nun cihaz üzerindeki yerleşik **QuickJS (sandboxed ES2020)** motoru ile %100 uyumlu olacak şekilde geliştirilmiştir.
 
@@ -8,6 +8,7 @@ Bu eklenti, Nuvio'nun cihaz üzerindeki yerleşik **QuickJS (sandboxed ES2020)**
 
 ## 🚀 Özellikler
 
+- **Çift Sunucu Desteği & Otomatik Algılama (Auto-Detection):** Emby ve Jellyfin sunucularını otomatik tanır. Sunucu türünüze göre API yollarını (Jellyfin root `/Videos/...` ve Emby `/emby/...`) ve kimlik doğrulama başlıklarını dinamik olarak ayarlar; kullanıcı müdahalesi veya ayrı eklenti gerektirmez.
 - **Direct Play (Doğrudan Oynatma):** Sunucu üzerinde transcode yapmadan orijinal video ve ses kalitesinde doğrudan oynatma URL'leri üretir.
 - **Dinamik Kalite & Başlık Tespiti:** HEVC, H.264, VP9 gibi video codec'lerini, 5.1/7.1 ses kanallarını ve bitrate bilgisini ayrıştırarak `Direct Play • HEVC • 5.1 AC3 (24 Mbps)` formatında açıklayıcı başlıklar sunar.
 - **Akıllı ID Desteği:**
@@ -31,14 +32,15 @@ Bu depo **tamamen güvenli ve genel (public) kullanıma uygundur**. Kod içerisi
 
 ### Yöntem 1: Cloudflare Worker ile Kişiye Özel Manifest URL'si (ÖNERİLEN & EN PRATİK)
 
-Eklenti, bünyesinde ücretsiz ve sunucusuz çalışan bir **Cloudflare Worker** barındırır. Bu yöntemle Emby bilgilerinizi web arayüzünden girip anında Nuvio'ya eklenebilecek kişisel bir manifest bağlantısı ve **QR Kod** alırsınız.
+Eklenti, bünyesinde ücretsiz ve sunucusuz çalışan bir **Cloudflare Worker** barındırır. Bu yöntemle Emby veya Jellyfin bilgilerinizi web arayüzünden girip anında Nuvio'ya eklenebilecek kişisel bir manifest bağlantısı ve **QR Kod** alırsınız.
 
 1. Cloudflare Dashboard'da ücretsiz bir Worker oluşturun (veya `npx wrangler deploy` çalıştırın).
 2. [`cloudflare-worker/worker.js`](cloudflare-worker/worker.js) kodunu yapıştırıp kaydedin.
 3. Size verilen Worker adresini tarayıcınızda açın (örn: `https://nuvio-emby.<hesap>.workers.dev`).
-4. Emby sunucu adresinizi, kullanıcı adı ve şifrenizi girip **Bağlantıyı Test Et**'e basın.
-5. **Manifest URL'si Üret** butonuna basarak size özel oluşturulan manifest bağlantısını kopyalayın (veya QR kodu telefonunuzla taratın).
-6. Nuvio uygulamasında **Ayarlar > Eklentiler > Eklenti Ekle** kısmına bu bağlantıyı yapıştırın.
+4. Emby veya Jellyfin sunucu adresinizi, kullanıcı adı ve şifrenizi (veya API Anahtarınızı) girin.
+5. **🔍 Bağlantıyı Test Et** butonuna basın (servis Emby veya Jellyfin olduğunu otomatik algılayıp sunucu sürümünü teyit eder).
+6. **⚡ Manifest URL'si Üret** butonuna basarak size özel oluşturulan manifest bağlantısını kopyalayın (veya QR kodu telefonunuzla taratın).
+7. Nuvio uygulamasında **Ayarlar > Eklentiler > Eklenti Ekle** kısmına bu bağlantıyı yapıştırın.
 
 > 🔒 **Gizlilik Güvencesi:** Bilgileriniz hiçbir veri tabanına kaydedilmez. Yapılandırma istemci tarafında URL-safe Base64 olarak kodlanır.
 
@@ -51,11 +53,12 @@ Detaylı rehber için: [Cloudflare Worker Dokümantasyonu](cloudflare-worker/REA
 Eklenti, Nuvio'nun yerel ayarlar arayüzünü (`onSettings`) destekler.
 
 1. Nuvio uygulamasında `manifest.json` adresinizi ekleyin.
-2. Eklenti listesinde **Emby** seçeneğine veya yanındaki **Ayarlar (Dişli)** simgesine tıklayın.
+2. Eklenti listesinde **Emby / Jellyfin** seçeneğine veya yanındaki **Ayarlar (Dişli)** simgesine tıklayın.
 3. Açılan formdan şu alanları doldurun:
-   - **Emby Sunucu Adresi:** `http://192.168.1.100:8096` veya `https://emby.ornek.com`
-   - **Kullanıcı Adı:** Emby kullanıcı adınız
-   - **Şifre:** Emby şifreniz (şifresiz hesap ise boş bırakın)
+   - **Sunucu Adresi:** `http://192.168.1.100:8096` veya `https://media.ornek.com`
+   - **Kullanıcı Adı:** Emby veya Jellyfin kullanıcı adınız
+   - **Şifre:** Hesap şifreniz (şifresiz hesap ise boş bırakın)
+   - **API Anahtarı:** Alternatif olarak doğrudan API Key (opsiyonel)
 4. Kaydedin. Bilgiler sadece kendi cihazınızdaki Nuvio uygulamasında saklanır.
 
 ---

@@ -1,12 +1,12 @@
 {
-  "name": "Nuvio Emby Repository",
+  "name": "Nuvio Emby & Jellyfin Repository",
   "version": "3.5.0",
-  "description": "Nuvio medya oynatıcısı için Emby sağlayıcı deposu",
+  "description": "Nuvio medya oynatıcısı için Emby ve Jellyfin sağlayıcı deposu",
   "scrapers": [
     {
       "id": "emby",
-      "name": "Emby",
-      "description": "Emby yerel ve uzak sunucuları için doğrudan oynatma (Direct Play) ve altyazı sağlayıcısı",
+      "name": "Emby / Jellyfin",
+      "description": "Emby ve Jellyfin yerel/uzak sunucuları için doğrudan oynatma (Direct Play) ve altyazı sağlayıcısı",
       "version": "3.5.0",
       "author": "Omc725",
       "supportedTypes": [

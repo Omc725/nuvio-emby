@@ -20,11 +20,11 @@ var __async = (__this, __arguments, generator) => {
 };
 const CONFIG = {
   serverUrl: "",
-  // Emby sunucu adresi (Nuvio Ayarlar menüsünden giriniz)
+  // Emby veya Jellyfin sunucu adresi (Nuvio Ayarlar menüsünden giriniz)
   username: "",
-  // Emby kullanıcı adı (Nuvio Ayarlar menüsünden giriniz)
+  // Emby / Jellyfin kullanıcı adı (Nuvio Ayarlar menüsünden giriniz)
   password: "",
-  // Emby kullanıcı şifresi (Nuvio Ayarlar menüsünden giriniz)
+  // Emby / Jellyfin kullanıcı şifresi (Nuvio Ayarlar menüsünden giriniz)
   debugMode: false,
   // Alternatif doğrudan API Key (opsiyonel)
   apiKey: "",
@@ -36,12 +36,12 @@ function sendRemoteLog(step, message, data) {
     const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("tr-TR");
     const dataStr = data !== void 0 && data !== null ? ` | ${JSON.stringify(data)}` : "";
     const textMsg = `[${time}][${step}] ${message}${dataStr}`;
-    console.log(`[Emby] ${textMsg}`);
+    console.log(`[Emby/Jellyfin] ${textMsg}`);
     if (LOG_ENDPOINT && typeof fetch === "function") {
       fetch(LOG_ENDPOINT, {
         method: "POST",
         headers: {
-          "Title": `Nuvio Emby: ${step}`,
+          "Title": `Nuvio Provider: ${step}`,
           "Priority": step === "ERROR" ? "high" : "default",
           "Tags": step === "ERROR" ? "warning" : step === "INIT" ? "rocket" : "information"
         },
@@ -53,7 +53,7 @@ function sendRemoteLog(step, message, data) {
   }
 }
 try {
-  sendRemoteLog("INIT", "emby.js (v3.5.0) Nuvio ortam\u0131nda ba\u015Far\u0131yla y\xFCklendi", {
+  sendRemoteLog("INIT", "emby.js (v3.5.0) Emby & Jellyfin Provider y\xFCklendi", {
     hasGlobalThis: typeof globalThis !== "undefined",
     hasSettings: typeof globalThis !== "undefined" && Boolean(globalThis.SCRAPER_SETTINGS)
   });
@@ -67,6 +67,24 @@ let authCache = {
   userId: "",
   timestamp: 0
 };
+let serverInfoCache = {
+  serverUrl: "",
+  prefix: "",
+  serverType: "emby",
+  serverName: "",
+  timestamp: 0
+};
+function getAuthHeaders(apiKey) {
+  const headers = {
+    "Accept": "application/json"
+  };
+  if (apiKey) {
+    headers["X-Emby-Token"] = apiKey;
+    headers["X-MediaBrowser-Token"] = apiKey;
+    headers["Authorization"] = `MediaBrowser Token="${apiKey}"`;
+  }
+  return headers;
+}
 const TMDB_PUBLIC_API_KEY = "439c478a771f35c05022f9feabcca01c";
 const LANG_MAP = {
   tur: "tr",
@@ -192,11 +210,59 @@ function getActiveConfig() {
 function sanitizeUrl(url) {
   if (!url) return "";
   let clean = String(url).trim().replace(/\/+$/, "");
-  clean = clean.replace(/\/emby\/?$/i, "");
   if (!/^https?:\/\//i.test(clean)) {
     clean = `http://${clean}`;
   }
   return clean.replace(/\/+$/, "");
+}
+function getServerInfo(serverUrl, apiKey) {
+  return __async(this, null, function* () {
+    const now = Date.now();
+    if (serverInfoCache.serverUrl === serverUrl && serverInfoCache.timestamp && now - serverInfoCache.timestamp < 12 * 60 * 60 * 1e3) {
+      return serverInfoCache;
+    }
+    const isUrlEndingWithEmby = /\/emby\/?$/i.test(serverUrl);
+    const prefixes = isUrlEndingWithEmby ? [""] : ["", "/emby"];
+    for (const p of prefixes) {
+      const url = `${serverUrl}${p}/System/Info/Public`;
+      try {
+        const res = yield fetch(url, { headers: getAuthHeaders(apiKey) });
+        if (res && res.ok) {
+          const data = yield res.json();
+          const prod = (data && (data.ProductName || data.ServerName) || "").toLowerCase();
+          const isJellyfin = prod.includes("jellyfin");
+          const serverType = isJellyfin ? "jellyfin" : "emby";
+          const serverName = data && data.ServerName || (isJellyfin ? "Jellyfin Server" : "Emby Server");
+          let prefix = p;
+          if (isJellyfin) {
+            prefix = "";
+          } else if (!prefix && !isUrlEndingWithEmby) {
+            prefix = "/emby";
+          }
+          serverInfoCache = {
+            serverUrl,
+            prefix,
+            serverType,
+            serverName,
+            timestamp: now
+          };
+          return serverInfoCache;
+        }
+      } catch (e) {
+      }
+    }
+    const isJellyfinHint = serverUrl.toLowerCase().includes("jellyfin");
+    const fallbackType = isJellyfinHint ? "jellyfin" : "emby";
+    const fallbackPrefix = fallbackType === "jellyfin" || isUrlEndingWithEmby ? "" : "/emby";
+    serverInfoCache = {
+      serverUrl,
+      prefix: fallbackPrefix,
+      serverType: fallbackType,
+      serverName: fallbackType === "jellyfin" ? "Jellyfin Server" : "Emby Server",
+      timestamp: now
+    };
+    return serverInfoCache;
+  });
 }
 function normalizeLanguage(lang) {
   if (!lang) return "und";
@@ -496,7 +562,22 @@ function buildStreamDescription(mediaInfo) {
   }
   return lines.join("\n") || "Stream Available";
 }
-function extractSubtitles(serverUrl, itemId, source, apiKey) {
+function extractSubtitles(serverUrl, prefixOrItemId, itemIdOrSource, sourceOrApiKey, apiKeyOrUndefined) {
+  let prefix = "";
+  let itemId = "";
+  let source = null;
+  let apiKey = "";
+  if (apiKeyOrUndefined !== void 0) {
+    prefix = prefixOrItemId || "";
+    itemId = itemIdOrSource;
+    source = sourceOrApiKey;
+    apiKey = apiKeyOrUndefined;
+  } else {
+    itemId = prefixOrItemId;
+    source = itemIdOrSource;
+    apiKey = sourceOrApiKey;
+    prefix = "";
+  }
   const subtitles = [];
   if (!source || !Array.isArray(source.MediaStreams)) return subtitles;
   for (let i = 0; i < source.MediaStreams.length; i++) {
@@ -519,9 +600,9 @@ function extractSubtitles(serverUrl, itemId, source, apiKey) {
       if (stream.DeliveryUrl) {
         subUrl = stream.DeliveryUrl.startsWith("http") ? stream.DeliveryUrl : `${serverUrl}${stream.DeliveryUrl}`;
       } else if (stream.IsExternal && stream.Path) {
-        subUrl = `${serverUrl}/emby/Videos/${itemId}/${source.Id}/Subtitles/${subIndex}/Stream.${stream.Codec || "vtt"}?api_key=${encodeURIComponent(apiKey)}`;
+        subUrl = `${serverUrl}${prefix}/Videos/${itemId}/${source.Id}/Subtitles/${subIndex}/Stream.${stream.Codec || "vtt"}?api_key=${encodeURIComponent(apiKey)}`;
       } else {
-        subUrl = `${serverUrl}/emby/Videos/${itemId}/${source.Id}/Subtitles/${subIndex}/Stream.vtt?api_key=${encodeURIComponent(apiKey)}`;
+        subUrl = `${serverUrl}${prefix}/Videos/${itemId}/${source.Id}/Subtitles/${subIndex}/Stream.vtt?api_key=${encodeURIComponent(apiKey)}`;
       }
       if (subUrl) {
         subtitles.push({
@@ -546,8 +627,8 @@ function authenticateEmby(serverUrl, username, password, logFn) {
     }
     const authHeader = 'MediaBrowser Client="Nuvio", Device="Nuvio Player", DeviceId="nuvio-emby-player", Version="3.5.0"';
     const endpoints = [
-      `${serverUrl}/emby/Users/AuthenticateByName`,
-      `${serverUrl}/Users/AuthenticateByName`
+      `${serverUrl}/Users/AuthenticateByName`,
+      `${serverUrl}/emby/Users/AuthenticateByName`
     ];
     for (const url of endpoints) {
       try {
@@ -631,28 +712,42 @@ function fetchTmdbMetadata(cleanId, isImdb, isTv) {
     return null;
   });
 }
-function searchEmbyItem(serverUrl, userId, apiKey, idInfo, preferredType, logFn) {
+function searchEmbyItem(serverUrl, prefix, userId, apiKey, idInfo, preferredType, logFn) {
   return __async(this, null, function* () {
-    const { cleanId, isImdb } = idInfo;
+    let actualPrefix = prefix;
+    let actualUserId = userId;
+    let actualApiKey = apiKey;
+    let actualIdInfo = idInfo;
+    let actualPreferredType = preferredType;
+    let actualLogFn = logFn;
+    if (typeof actualIdInfo === "string" || typeof actualPreferredType === "function" && !actualLogFn) {
+      actualLogFn = actualPreferredType;
+      actualPreferredType = actualIdInfo;
+      actualIdInfo = actualApiKey;
+      actualApiKey = actualUserId;
+      actualUserId = actualPrefix;
+      actualPrefix = "";
+    }
+    const { cleanId, isImdb } = actualIdInfo;
     if (!cleanId) return null;
-    const isTv = preferredType === "Series";
-    const typeFilter = preferredType ? `&IncludeItemTypes=${encodeURIComponent(preferredType)}` : "";
-    sendRemoteLog("SEARCH_START", `Arama ba\u015Flat\u0131ld\u0131: cleanId=${cleanId}, isImdb=${isImdb}, type=${preferredType}`);
+    const isTv = actualPreferredType === "Series";
+    const typeFilter = actualPreferredType ? `&IncludeItemTypes=${encodeURIComponent(actualPreferredType)}` : "";
+    sendRemoteLog("SEARCH_START", `Arama ba\u015Flat\u0131ld\u0131: cleanId=${cleanId}, isImdb=${isImdb}, type=${actualPreferredType}`);
     const providerQueries = isImdb ? [`imdb.${cleanId},Imdb.${cleanId}`, `tmdb.${cleanId},Tmdb.${cleanId}`] : [`tmdb.${cleanId},Tmdb.${cleanId}`, `TheMovieDb.${cleanId}`];
     for (const q of providerQueries) {
-      const url = `${serverUrl}/emby/Users/${userId}/Items?AnyProviderIdEquals=${encodeURIComponent(q)}${typeFilter}&Recursive=true&api_key=${encodeURIComponent(apiKey)}`;
+      const url = `${serverUrl}${actualPrefix}/Users/${actualUserId}/Items?AnyProviderIdEquals=${encodeURIComponent(q)}${typeFilter}&Recursive=true&api_key=${encodeURIComponent(actualApiKey)}`;
       try {
-        const res = yield fetch(url, { headers: { "Accept": "application/json", "X-Emby-Token": apiKey } });
+        const res = yield fetch(url, { headers: getAuthHeaders(actualApiKey) });
         if (!res.ok) continue;
         const data = yield res.json();
         if (data && Array.isArray(data.Items) && data.Items.length > 0) {
-          const matched = (preferredType ? data.Items.find((i) => i.Type === preferredType) : null) || data.Items[0];
-          if (logFn) logFn(`ProviderId (${q}) ile bulundu: ${matched.Name} (ID: ${matched.Id})`);
+          const matched = (actualPreferredType ? data.Items.find((i) => i.Type === actualPreferredType) : null) || data.Items[0];
+          if (actualLogFn) actualLogFn(`ProviderId (${q}) ile bulundu: ${matched.Name} (ID: ${matched.Id})`);
           sendRemoteLog("SEARCH_FOUND", `ProviderId ile bulundu: ${matched.Name} (ID: ${matched.Id}, Type: ${matched.Type})`);
           return matched;
         }
       } catch (err) {
-        if (logFn) logFn(`Arama hatas\u0131: ${err.message || err}`);
+        if (actualLogFn) actualLogFn(`Arama hatas\u0131: ${err.message || err}`);
         sendRemoteLog("SEARCH_ERROR", `ProviderId arama hatas\u0131 (${q}): ${err.message || err}`);
       }
     }
@@ -668,14 +763,14 @@ function searchEmbyItem(serverUrl, userId, apiKey, idInfo, preferredType, logFn)
         altQueries.push(`imdb.${meta.imdbId},Imdb.${meta.imdbId}`);
       }
       for (const altQ of altQueries) {
-        const url = `${serverUrl}/emby/Users/${userId}/Items?AnyProviderIdEquals=${encodeURIComponent(altQ)}${typeFilter}&Recursive=true&api_key=${encodeURIComponent(apiKey)}`;
+        const url = `${serverUrl}${actualPrefix}/Users/${actualUserId}/Items?AnyProviderIdEquals=${encodeURIComponent(altQ)}${typeFilter}&Recursive=true&api_key=${encodeURIComponent(actualApiKey)}`;
         try {
-          const res = yield fetch(url, { headers: { "Accept": "application/json", "X-Emby-Token": apiKey } });
+          const res = yield fetch(url, { headers: getAuthHeaders(actualApiKey) });
           if (res.ok) {
             const data = yield res.json();
             if (data && Array.isArray(data.Items) && data.Items.length > 0) {
-              const matched = (preferredType ? data.Items.find((i) => i.Type === preferredType) : null) || data.Items[0];
-              if (logFn) logFn(`Alternatif ID (${altQ}) ile bulundu: ${matched.Name} (ID: ${matched.Id})`);
+              const matched = (actualPreferredType ? data.Items.find((i) => i.Type === actualPreferredType) : null) || data.Items[0];
+              if (actualLogFn) actualLogFn(`Alternatif ID (${altQ}) ile bulundu: ${matched.Name} (ID: ${matched.Id})`);
               sendRemoteLog("SEARCH_FOUND", `Alternatif ID ile bulundu: ${matched.Name} (ID: ${matched.Id})`);
               return matched;
             }
@@ -685,14 +780,14 @@ function searchEmbyItem(serverUrl, userId, apiKey, idInfo, preferredType, logFn)
       }
       const titles = [meta.title, meta.originalTitle].filter(Boolean);
       for (const title of titles) {
-        const url = `${serverUrl}/emby/Users/${userId}/Items?SearchTerm=${encodeURIComponent(title)}${typeFilter}&Recursive=true&api_key=${encodeURIComponent(apiKey)}`;
+        const url = `${serverUrl}${actualPrefix}/Users/${actualUserId}/Items?SearchTerm=${encodeURIComponent(title)}${typeFilter}&Recursive=true&api_key=${encodeURIComponent(actualApiKey)}`;
         try {
-          const res = yield fetch(url, { headers: { "Accept": "application/json", "X-Emby-Token": apiKey } });
+          const res = yield fetch(url, { headers: getAuthHeaders(actualApiKey) });
           if (res.ok) {
             const data = yield res.json();
             if (data && Array.isArray(data.Items) && data.Items.length > 0) {
-              const matched = meta.year ? data.Items.find((item) => String(item.ProductionYear) === String(meta.year) && item.Type === preferredType) || data.Items.find((item) => String(item.ProductionYear) === String(meta.year)) || data.Items[0] : (preferredType ? data.Items.find((i) => i.Type === preferredType) : null) || data.Items[0];
-              if (logFn) logFn(`Ba\u015Fl\u0131k ile bulundu (${title}): ${matched.Name} (ID: ${matched.Id})`);
+              const matched = meta.year ? data.Items.find((item) => String(item.ProductionYear) === String(meta.year) && item.Type === actualPreferredType) || data.Items.find((item) => String(item.ProductionYear) === String(meta.year)) || data.Items[0] : (actualPreferredType ? data.Items.find((i) => i.Type === actualPreferredType) : null) || data.Items[0];
+              if (actualLogFn) actualLogFn(`Ba\u015Fl\u0131k ile bulundu (${title}): ${matched.Name} (ID: ${matched.Id})`);
               sendRemoteLog("SEARCH_FOUND", `Ba\u015Fl\u0131k ile bulundu: ${matched.Name} (ID: ${matched.Id})`);
               return matched;
             }
@@ -702,47 +797,60 @@ function searchEmbyItem(serverUrl, userId, apiKey, idInfo, preferredType, logFn)
       }
     }
     try {
-      const url = `${serverUrl}/emby/Users/${userId}/Items?SearchTerm=${encodeURIComponent(cleanId)}${typeFilter}&Recursive=true&api_key=${encodeURIComponent(apiKey)}`;
-      const res = yield fetch(url, { headers: { "Accept": "application/json", "X-Emby-Token": apiKey } });
+      const url = `${serverUrl}${actualPrefix}/Users/${actualUserId}/Items?SearchTerm=${encodeURIComponent(cleanId)}${typeFilter}&Recursive=true&api_key=${encodeURIComponent(actualApiKey)}`;
+      const res = yield fetch(url, { headers: getAuthHeaders(actualApiKey) });
       if (res.ok) {
         const data = yield res.json();
         if (data && Array.isArray(data.Items) && data.Items.length > 0) {
-          const matched = (preferredType ? data.Items.find((i) => i.Type === preferredType) : null) || data.Items[0];
-          if (logFn) logFn(`SearchTerm ile bulundu: ${matched.Name} (ID: ${matched.Id})`);
+          const matched = (actualPreferredType ? data.Items.find((i) => i.Type === actualPreferredType) : null) || data.Items[0];
+          if (actualLogFn) actualLogFn(`SearchTerm ile bulundu: ${matched.Name} (ID: ${matched.Id})`);
           sendRemoteLog("SEARCH_FOUND", `SearchTerm ile bulundu: ${matched.Name} (ID: ${matched.Id})`);
           return matched;
         }
       }
     } catch (e) {
     }
-    if (logFn) logFn(`Emby'de e\u015Fle\u015Fen \xF6\u011Fe bulunamad\u0131 (ID: ${cleanId})`);
-    sendRemoteLog("SEARCH_NOT_FOUND", `Emby'de e\u015Fle\u015Fen \xF6\u011Fe bulunamad\u0131 (ID: ${cleanId}, Type: ${preferredType})`);
+    if (actualLogFn) actualLogFn(`Sunucuda e\u015Fle\u015Fen \xF6\u011Fe bulunamad\u0131 (ID: ${cleanId})`);
+    sendRemoteLog("SEARCH_NOT_FOUND", `Sunucuda e\u015Fle\u015Fen \xF6\u011Fe bulunamad\u0131 (ID: ${cleanId}, Type: ${actualPreferredType})`);
     return null;
   });
 }
-function findEpisode(serverUrl, apiKey, seriesId, season, episode, userId, logFn) {
+function findEpisode(serverUrl, prefix, apiKey, seriesId, season, episode, userId, logFn) {
   return __async(this, null, function* () {
-    const targetSeason = Number(season);
-    const targetEpisode = Number(episode);
+    let actualPrefix = prefix;
+    let actualApiKey = apiKey;
+    let actualSeriesId = seriesId;
+    let actualSeason = season;
+    let actualEpisode = episode;
+    let actualUserId = userId;
+    let actualLogFn = logFn;
+    if (typeof actualUserId === "function" && !actualLogFn) {
+      actualLogFn = actualUserId;
+      actualUserId = actualEpisode;
+      actualEpisode = actualSeason;
+      actualSeason = actualSeriesId;
+      actualSeriesId = actualApiKey;
+      actualApiKey = actualPrefix;
+      actualPrefix = "";
+    }
+    const targetSeason = Number(actualSeason);
+    const targetEpisode = Number(actualEpisode);
     const seasonQuery = !isNaN(targetSeason) ? `Season=${targetSeason}&` : "";
-    const userQuery = userId ? `UserId=${encodeURIComponent(userId)}&` : "";
-    const url = `${serverUrl}/emby/Shows/${seriesId}/Episodes?${seasonQuery}${userQuery}api_key=${encodeURIComponent(apiKey)}`;
+    const userQuery = actualUserId ? `UserId=${encodeURIComponent(actualUserId)}&` : "";
+    const url = `${serverUrl}${actualPrefix}/Shows/${actualSeriesId}/Episodes?${seasonQuery}${userQuery}api_key=${encodeURIComponent(actualApiKey)}`;
     try {
       const res = yield fetch(url, {
         method: "GET",
-        headers: {
-          "Accept": "application/json",
-          "X-Emby-Token": apiKey
-        }
+        headers: getAuthHeaders(actualApiKey)
       });
       if (!res.ok) {
-        if (logFn) logFn(`B\xF6l\xFCm listesi al\u0131namad\u0131: HTTP ${res.status}`);
+        if (actualLogFn) actualLogFn(`B\xF6l\xFCm listesi al\u0131namad\u0131: HTTP ${res.status}`);
         sendRemoteLog("EPISODE_ERROR", `B\xF6l\xFCm listesi al\u0131namad\u0131: HTTP ${res.status}`);
         return null;
       }
       const data = yield res.json();
       if (!data || !Array.isArray(data.Items)) {
-        if (logFn) logFn("B\xF6l\xFCm listesi bo\u015F d\xF6nd\xFC");
+        if (actualLogFn) actualLogFn("B\xF6l\xFCm listesi bo\u015F d\xF6nd\xFC");
         sendRemoteLog("EPISODE_NOT_FOUND", "B\xF6l\xFCm listesi bo\u015F d\xF6nd\xFC");
         return null;
       }
@@ -754,39 +862,47 @@ function findEpisode(serverUrl, apiKey, seriesId, season, episode, userId, logFn
         return matchesEpisode && matchesSeason;
       });
       if (matchedEpisode) {
-        if (logFn) logFn(`B\xF6l\xFCm bulundu: S${season}E${episode} - ${matchedEpisode.Name || "B\xF6l\xFCm"} (ID: ${matchedEpisode.Id})`);
-        sendRemoteLog("EPISODE_FOUND", `B\xF6l\xFCm bulundu: S${season}E${episode} - ${matchedEpisode.Name || "B\xF6l\xFCm"} (ID: ${matchedEpisode.Id})`);
+        if (actualLogFn) actualLogFn(`B\xF6l\xFCm bulundu: S${actualSeason}E${actualEpisode} - ${matchedEpisode.Name || "B\xF6l\xFCm"} (ID: ${matchedEpisode.Id})`);
+        sendRemoteLog("EPISODE_FOUND", `B\xF6l\xFCm bulundu: S${actualSeason}E${actualEpisode} - ${matchedEpisode.Name || "B\xF6l\xFCm"} (ID: ${matchedEpisode.Id})`);
         return matchedEpisode;
       } else {
-        if (logFn) logFn(`B\xF6l\xFCm e\u015Fle\u015Fmedi (Aranan S${season}E${episode})`);
-        sendRemoteLog("EPISODE_NOT_FOUND", `B\xF6l\xFCm e\u015Fle\u015Fmedi (Aranan S${season}E${episode})`);
+        if (actualLogFn) actualLogFn(`B\xF6l\xFCm e\u015Fle\u015Fmedi (Aranan S${actualSeason}E${actualEpisode})`);
+        sendRemoteLog("EPISODE_NOT_FOUND", `B\xF6l\xFCm e\u015Fle\u015Fmedi (Aranan S${actualSeason}E${actualEpisode})`);
         return null;
       }
     } catch (err) {
-      if (logFn) logFn(`B\xF6l\xFCm arama hatas\u0131: ${err.message || err}`);
+      if (actualLogFn) actualLogFn(`B\xF6l\xFCm arama hatas\u0131: ${err.message || err}`);
       sendRemoteLog("EPISODE_ERROR", `B\xF6l\xFCm arama hatas\u0131: ${err.message || err}`);
       return null;
     }
   });
 }
-function getPlaybackInfo(serverUrl, userId, apiKey, itemId, logFn) {
+function getPlaybackInfo(serverUrl, prefix, userId, apiKey, itemId, logFn) {
   return __async(this, null, function* () {
+    let actualPrefix = prefix;
+    let actualUserId = userId;
+    let actualApiKey = apiKey;
+    let actualItemId = itemId;
+    let actualLogFn = logFn;
+    if (typeof actualItemId === "function" && !actualLogFn) {
+      actualLogFn = actualItemId;
+      actualItemId = actualApiKey;
+      actualApiKey = actualUserId;
+      actualUserId = actualPrefix;
+      actualPrefix = "";
+    }
     const endpoints = [
-      `${serverUrl}/emby/Items/${itemId}/PlaybackInfo?api_key=${encodeURIComponent(apiKey)}&UserId=${encodeURIComponent(userId)}`,
-      `${serverUrl}/emby/Users/${userId}/Items/${itemId}/PlaybackInfo?api_key=${encodeURIComponent(apiKey)}`,
-      `${serverUrl}/Items/${itemId}/PlaybackInfo?api_key=${encodeURIComponent(apiKey)}&UserId=${encodeURIComponent(userId)}`
+      `${serverUrl}${actualPrefix}/Items/${actualItemId}/PlaybackInfo?api_key=${encodeURIComponent(actualApiKey)}&UserId=${encodeURIComponent(actualUserId)}`,
+      `${serverUrl}${actualPrefix}/Users/${actualUserId}/Items/${actualItemId}/PlaybackInfo?api_key=${encodeURIComponent(actualApiKey)}`,
+      `${serverUrl}/Items/${actualItemId}/PlaybackInfo?api_key=${encodeURIComponent(actualApiKey)}&UserId=${encodeURIComponent(actualUserId)}`
     ];
     for (const url of endpoints) {
       try {
         const res = yield fetch(url, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "X-Emby-Token": apiKey
-          },
+          headers: Object.assign({ "Content-Type": "application/json" }, getAuthHeaders(actualApiKey)),
           body: JSON.stringify({
-            UserId: userId,
+            UserId: actualUserId,
             StartTimeTicks: 0,
             IsPlayback: false,
             AutoOpenLiveStream: false
@@ -795,28 +911,28 @@ function getPlaybackInfo(serverUrl, userId, apiKey, itemId, logFn) {
         if (!res.ok) continue;
         const data = yield res.json();
         if (data && Array.isArray(data.MediaSources) && data.MediaSources.length > 0) {
-          if (logFn) logFn(`PlaybackInfo al\u0131nd\u0131: ${data.MediaSources.length} kaynak`);
+          if (actualLogFn) actualLogFn(`PlaybackInfo al\u0131nd\u0131: ${data.MediaSources.length} kaynak`);
           return data;
         }
       } catch (err) {
       }
     }
     try {
-      const itemUrl = `${serverUrl}/emby/Users/${userId}/Items/${itemId}?api_key=${encodeURIComponent(apiKey)}`;
+      const itemUrl = `${serverUrl}${actualPrefix}/Users/${actualUserId}/Items/${actualItemId}?api_key=${encodeURIComponent(actualApiKey)}`;
       const res = yield fetch(itemUrl, {
         method: "GET",
-        headers: { "Accept": "application/json", "X-Emby-Token": apiKey }
+        headers: getAuthHeaders(actualApiKey)
       });
       if (res.ok) {
         const itemData = yield res.json();
         if (itemData && Array.isArray(itemData.MediaSources) && itemData.MediaSources.length > 0) {
-          if (logFn) logFn(`\xD6\u011Fe detay\u0131ndan MediaSources al\u0131nd\u0131: ${itemData.MediaSources.length} kaynak`);
+          if (actualLogFn) actualLogFn(`\xD6\u011Fe detay\u0131ndan MediaSources al\u0131nd\u0131: ${itemData.MediaSources.length} kaynak`);
           return itemData;
         }
       }
     } catch (err) {
     }
-    if (logFn) logFn("PlaybackInfo kaynak bulamad\u0131");
+    if (actualLogFn) actualLogFn("PlaybackInfo kaynak bulamad\u0131");
     return null;
   });
 }
@@ -854,7 +970,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
         sendRemoteLog("ERROR", "Sunucu adresi bo\u015F!");
         return activeConfig2.debugMode ? [{
           name: "[Emby Te\u015Fhis] Sunucu Adresi Bo\u015F",
-          title: "Emby ayarlar\u0131ndan sunucu adresinizi girin",
+          title: "Ayarlardan Emby veya Jellyfin sunucu adresinizi girin",
           url: "http://localhost",
           quality: "HATA"
         }] : [];
@@ -885,6 +1001,9 @@ function getStreams(tmdbId, mediaType, season, episode) {
           quality: "HATA"
         }] : [];
       }
+      const serverInfo = yield getServerInfo(serverUrl, apiKey);
+      const prefix = serverInfo.prefix || "";
+      const streamProviderName = serverInfo.serverType === "jellyfin" ? "Jellyfin" : "Emby";
       if (!idInfo.cleanId) {
         log("HATA: ID parametresi bo\u015F!");
         sendRemoteLog("ERROR", "ID parametresi bo\u015F!");
@@ -900,9 +1019,9 @@ function getStreams(tmdbId, mediaType, season, episode) {
       if (isTv) {
         const seasonNum = targetSeason !== void 0 ? targetSeason : 1;
         const episodeNum = targetEpisode !== void 0 ? targetEpisode : 1;
-        let seriesItem = yield searchEmbyItem(serverUrl, userId, apiKey, idInfo, "Series", log);
+        let seriesItem = yield searchEmbyItem(serverUrl, prefix, userId, apiKey, idInfo, "Series", log);
         if (!seriesItem) {
-          const movieFallback = yield searchEmbyItem(serverUrl, userId, apiKey, idInfo, "Movie", log);
+          const movieFallback = yield searchEmbyItem(serverUrl, prefix, userId, apiKey, idInfo, "Movie", log);
           if (movieFallback) {
             targetItemId = movieFallback.Id;
             matchedItemName = movieFallback.Name || "Film";
@@ -912,19 +1031,19 @@ function getStreams(tmdbId, mediaType, season, episode) {
         if (seriesItem && seriesItem.Id) {
           matchedItemName = seriesItem.Name || "Dizi";
           matchedItemYear = seriesItem.ProductionYear ? String(seriesItem.ProductionYear) : "";
-          const episodeItem = yield findEpisode(serverUrl, apiKey, seriesItem.Id, seasonNum, episodeNum, userId, log);
+          const episodeItem = yield findEpisode(serverUrl, prefix, apiKey, seriesItem.Id, seasonNum, episodeNum, userId, log);
           if (episodeItem && episodeItem.Id) {
             targetItemId = episodeItem.Id;
           }
         }
       } else {
-        let movieItem = yield searchEmbyItem(serverUrl, userId, apiKey, idInfo, "Movie", log);
+        let movieItem = yield searchEmbyItem(serverUrl, prefix, userId, apiKey, idInfo, "Movie", log);
         if (!movieItem) {
-          const seriesFallback = yield searchEmbyItem(serverUrl, userId, apiKey, idInfo, "Series", log);
+          const seriesFallback = yield searchEmbyItem(serverUrl, prefix, userId, apiKey, idInfo, "Series", log);
           if (seriesFallback && seriesFallback.Id) {
             matchedItemName = seriesFallback.Name || "Dizi";
             matchedItemYear = seriesFallback.ProductionYear ? String(seriesFallback.ProductionYear) : "";
-            const episodeItem = yield findEpisode(serverUrl, apiKey, seriesFallback.Id, 1, 1, userId, log);
+            const episodeItem = yield findEpisode(serverUrl, prefix, apiKey, seriesFallback.Id, 1, 1, userId, log);
             if (episodeItem && episodeItem.Id) {
               targetItemId = episodeItem.Id;
             }
@@ -936,12 +1055,12 @@ function getStreams(tmdbId, mediaType, season, episode) {
         }
       }
       if (!targetItemId) {
-        log(`Emby'de e\u015Fle\u015Fen medya bulunamad\u0131 (ID: ${idInfo.cleanId})`);
-        sendRemoteLog("MEDIA_NOT_FOUND", `Emby'de e\u015Fle\u015Fen medya bulunamad\u0131 (ID: ${idInfo.cleanId})`);
+        log(`${streamProviderName}'de e\u015Fle\u015Fen medya bulunamad\u0131 (ID: ${idInfo.cleanId})`);
+        sendRemoteLog("MEDIA_NOT_FOUND", `${streamProviderName}'de e\u015Fle\u015Fen medya bulunamad\u0131 (ID: ${idInfo.cleanId})`);
         if (activeConfig2.debugMode) {
           return [{
-            name: "[Emby Te\u015Fhis] Ar\u015Fivde Bulunamad\u0131",
-            title: `ID: ${idInfo.cleanId} Emby ar\u015Fivinizde e\u015Fle\u015Fmedi`,
+            name: `[${streamProviderName} Te\u015Fhis] Ar\u015Fivde Bulunamad\u0131`,
+            title: `ID: ${idInfo.cleanId} ${streamProviderName} ar\u015Fivinizde e\u015Fle\u015Fmedi`,
             url: serverUrl,
             quality: "B\u0130LG\u0130"
           }];
@@ -950,13 +1069,13 @@ function getStreams(tmdbId, mediaType, season, episode) {
       }
       sendRemoteLog("TARGET_ITEM", `Hedef medya belirlendi: "${matchedItemName}" (Item ID: ${targetItemId})`);
       sendRemoteLog("PLAYBACK_INFO", `PlaybackInfo al\u0131n\u0131yor (Item ID: ${targetItemId})`);
-      const playbackData = yield getPlaybackInfo(serverUrl, userId, apiKey, targetItemId, log);
+      const playbackData = yield getPlaybackInfo(serverUrl, prefix, userId, apiKey, targetItemId, log);
       if (!playbackData || !Array.isArray(playbackData.MediaSources) || playbackData.MediaSources.length === 0) {
         log(`Item ${targetItemId} i\xE7in oynat\u0131labilir kaynak bulunamad\u0131`);
         sendRemoteLog("NO_SOURCES", `Item ${targetItemId} (${matchedItemName}) i\xE7in MediaSource bulunamad\u0131!`);
         if (activeConfig2.debugMode) {
           return [{
-            name: "[Emby Te\u015Fhis] Kaynak Yok",
+            name: `[${streamProviderName} Te\u015Fhis] Kaynak Yok`,
             title: `${matchedItemName} i\xE7in MediaSource bulunamad\u0131`,
             url: serverUrl,
             quality: "B\u0130LG\u0130"
@@ -1023,33 +1142,36 @@ function getStreams(tmdbId, mediaType, season, episode) {
         };
         const streamDescription = buildStreamDescription(mediaInfo);
         const filename = source.Path ? source.Path.split(/[\\/]/).pop() : source.Name || "stream";
-        const streamUrl = `${serverUrl}/emby/Videos/${targetItemId}/stream.${container.toLowerCase()}?static=true&MediaSourceId=${encodeURIComponent(source.Id)}&api_key=${encodeURIComponent(apiKey)}`;
-        const subtitles = extractSubtitles(serverUrl, targetItemId, source, apiKey);
+        const streamUrl = `${serverUrl}${prefix}/Videos/${targetItemId}/stream.${container.toLowerCase()}?static=true&MediaSourceId=${encodeURIComponent(source.Id)}&api_key=${encodeURIComponent(apiKey)}`;
+        const subtitles = extractSubtitles(serverUrl, prefix, targetItemId, source, apiKey);
         const techDetails = [dimensions, hdrTag, videoTag, audioTag, container, bitrateFormatted].filter(Boolean).join(" \u2022 ");
         streams.push({
-          name: "Emby",
+          name: streamProviderName,
           title: streamDescription,
           description: streamDescription,
           url: streamUrl,
           quality: qualityTag,
           size: sizeFormatted || "",
           language: techDetails || "",
-          provider: "emby",
+          provider: serverInfo.serverType || "emby",
           type: container.toLowerCase(),
           headers: {
-            "X-Emby-Token": apiKey
+            "X-Emby-Token": apiKey,
+            "X-MediaBrowser-Token": apiKey
           },
           behaviorHints: {
             filename,
             videoSize: Number(source.Size) || void 0,
             notWebReady: true,
-            bingeGroup: `Emby-${(qualityTag || "Direct Play").trim()}`,
+            bingeGroup: `${streamProviderName}-${(qualityTag || "Direct Play").trim()}`,
             headers: {
-              "X-Emby-Token": apiKey
+              "X-Emby-Token": apiKey,
+              "X-MediaBrowser-Token": apiKey
             },
             proxyHeaders: {
               request: {
-                "X-Emby-Token": apiKey
+                "X-Emby-Token": apiKey,
+                "X-MediaBrowser-Token": apiKey
               }
             }
           },
@@ -1058,8 +1180,8 @@ function getStreams(tmdbId, mediaType, season, episode) {
       }
       if (activeConfig2.debugMode && streams.length > 0) {
         streams.unshift({
-          name: "[Emby Te\u015Fhis] Ba\u011Flant\u0131 Aktif",
-          title: `${matchedItemName} \u2022 Emby ID: ${targetItemId} (${streams.length} kaynak)`,
+          name: `[${streamProviderName} Te\u015Fhis] Ba\u011Flant\u0131 Aktif`,
+          title: `${matchedItemName} \u2022 ${streamProviderName} ID: ${targetItemId} (${streams.length} kaynak)`,
           url: streams[0].url,
           quality: "TE\u015EH\u0130S"
         });
@@ -1095,34 +1217,34 @@ function onSettings() {
     return [
       {
         type: "header",
-        label: "Emby Sunucu Ba\u011Flant\u0131s\u0131"
+        label: "Emby / Jellyfin Sunucu Ba\u011Flant\u0131s\u0131"
       },
       {
         type: "text",
         key: "serverUrl",
         label: "Sunucu Adresi",
-        description: "\xD6rn: http://192.168.1.100:8096 veya https://emby.sunucunuz.com",
+        description: "\xD6rn: http://192.168.1.100:8096 veya https://jellyfin.sunucunuz.com",
         defaultValue: CONFIG.serverUrl
       },
       {
         type: "text",
         key: "username",
         label: "Kullan\u0131c\u0131 Ad\u0131",
-        description: "Emby kullan\u0131c\u0131 ad\u0131n\u0131z",
+        description: "Emby veya Jellyfin kullan\u0131c\u0131 ad\u0131n\u0131z",
         defaultValue: CONFIG.username
       },
       {
         type: "text",
         key: "password",
         label: "\u015Eifre",
-        description: "Emby kullan\u0131c\u0131 \u015Fifreniz (hesab\u0131n\u0131z \u015Fifresizse bo\u015F b\u0131rak\u0131n)",
+        description: "Emby veya Jellyfin kullan\u0131c\u0131 \u015Fifreniz (hesab\u0131n\u0131z \u015Fifresizse bo\u015F b\u0131rak\u0131n)",
         defaultValue: CONFIG.password
       },
       {
         type: "toggle",
         key: "debugMode",
         label: "Hata Ay\u0131klama Modu (Debug)",
-        description: "Ak\u0131\u015F listesinde Emby ba\u011Flant\u0131 ve arama te\u015Fhis kart\u0131n\u0131 g\xF6sterir",
+        description: "Ak\u0131\u015F listesinde Emby / Jellyfin ba\u011Flant\u0131 ve arama te\u015Fhis kart\u0131n\u0131 g\xF6sterir",
         defaultValue: false
       }
     ];

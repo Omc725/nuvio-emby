@@ -1,7 +1,7 @@
 {
   "name": "nuvio-emby",
   "version": "3.5.0",
-  "description": "Nuvio media player plugin & Cloudflare Worker for Emby server (Direct Play & Subtitles)",
+  "description": "Nuvio media player plugin & Cloudflare Worker for Emby and Jellyfin servers (Direct Play & Subtitles)",
   "main": "emby.js",
   "scripts": {
     "build:plugin": "npx -y esbuild src/emby.js --target=es2016 --format=cjs --outfile=emby.js && cp emby.js providers/emby.js",
