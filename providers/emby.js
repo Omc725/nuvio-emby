@@ -53,7 +53,7 @@ function sendRemoteLog(step, message, data) {
   }
 }
 try {
-  sendRemoteLog("INIT", "emby.js (v3.5.0) Emby & Jellyfin Provider y\xFCklendi", {
+  sendRemoteLog("INIT", "emby.js (v3.6.0) Emby & Jellyfin Provider y\xFCklendi", {
     hasGlobalThis: typeof globalThis !== "undefined",
     hasSettings: typeof globalThis !== "undefined" && Boolean(globalThis.SCRAPER_SETTINGS)
   });
@@ -322,7 +322,13 @@ function parseInputId(id, season, episode) {
   } else {
     raw = String(id || "").trim();
   }
-  if (raw.includes(":")) {
+  let isDirectEmby = false;
+  if (/^emby:(item:)?([a-zA-Z0-9_\-]+)/i.test(raw)) {
+    const match = raw.match(/^emby:(item:)?([a-zA-Z0-9_\-]+)/i);
+    raw = match[2];
+    isDirectEmby = true;
+  }
+  if (!isDirectEmby && raw.includes(":")) {
     const parts = raw.split(":");
     const firstPart = parts[0].toLowerCase();
     if (firstPart === "tmdb" || firstPart === "imdb" || firstPart === "movie" || firstPart === "tv" || firstPart === "series") {
@@ -340,12 +346,13 @@ function parseInputId(id, season, episode) {
     }
   }
   raw = raw.replace(/^(tmdb|imdb|movie|tv|series):/i, "").trim();
-  const isImdb = /^tt\d+/i.test(raw);
+  const isImdb = !isDirectEmby && /^tt\d+/i.test(raw);
   return {
     cleanId: raw,
     season: parsedSeason,
     episode: parsedEpisode,
-    isImdb
+    isImdb,
+    isDirectEmby
   };
 }
 function getQualityTag(videoStream) {
@@ -625,7 +632,7 @@ function authenticateEmby(serverUrl, username, password, logFn) {
         userId: authCache.userId
       };
     }
-    const authHeader = 'MediaBrowser Client="Nuvio", Device="Nuvio Player", DeviceId="nuvio-emby-player", Version="3.5.0"';
+    const authHeader = 'MediaBrowser Client="Nuvio", Device="Nuvio Player", DeviceId="nuvio-emby-player", Version="3.6.0"';
     const endpoints = [
       `${serverUrl}/Users/AuthenticateByName`,
       `${serverUrl}/emby/Users/AuthenticateByName`
@@ -952,7 +959,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
     const idInfo = parseInputId(tmdbId, season, episode);
     const targetSeason = idInfo.season !== void 0 ? idInfo.season : season;
     const targetEpisode = idInfo.episode !== void 0 ? idInfo.episode : episode;
-    log(`v3.5.0 \xE7al\u0131\u015Ft\u0131 (ID: ${JSON.stringify(tmdbId)} -> ${idInfo.cleanId}, T\xFCr: ${detectedMediaType}, S: ${targetSeason}, E: ${targetEpisode})`);
+    log(`v3.6.0 \xE7al\u0131\u015Ft\u0131 (ID: ${JSON.stringify(tmdbId)} -> ${idInfo.cleanId}, T\xFCr: ${detectedMediaType}, S: ${targetSeason}, E: ${targetEpisode})`);
     sendRemoteLog("GET_STREAMS", `getStreams \xE7a\u011Fr\u0131ld\u0131: ID=${JSON.stringify(tmdbId)} (${idInfo.cleanId})`, {
       rawId: tmdbId,
       cleanId: idInfo.cleanId,
@@ -1016,7 +1023,12 @@ function getStreams(tmdbId, mediaType, season, episode) {
       let targetItemId = null;
       let matchedItemName = "";
       let matchedItemYear = "";
-      if (isTv) {
+      if (idInfo.isDirectEmby && idInfo.cleanId) {
+        targetItemId = idInfo.cleanId;
+        matchedItemName = "Emby / Jellyfin Medya";
+        log(`Do\u011Frudan Emby/Jellyfin Item ID kullan\u0131l\u0131yor: ${targetItemId}`);
+        sendRemoteLog("DIRECT_ITEM", `Do\u011Frudan Item ID kullan\u0131ld\u0131: ${targetItemId}`);
+      } else if (isTv) {
         const seasonNum = targetSeason !== void 0 ? targetSeason : 1;
         const episodeNum = targetEpisode !== void 0 ? targetEpisode : 1;
         let seriesItem = yield searchEmbyItem(serverUrl, prefix, userId, apiKey, idInfo, "Series", log);

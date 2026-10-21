@@ -2,3 +2,5 @@ node_modules/
 .DS_Store
 *.log
 .env
+emby-audio-downloader.js
+test/test-audio-dl.js

@@ -1,7 +1,7 @@
 {
   "name": "nuvio-emby",
-  "version": "3.5.0",
-  "description": "Nuvio media player plugin & Cloudflare Worker for Emby and Jellyfin servers (Direct Play & Subtitles)",
+  "version": "3.6.0",
+  "description": "Nuvio media player plugin & Cloudflare Worker for Emby and Jellyfin servers (Direct Play, Catalogs & Subtitles)",
   "main": "emby.js",
   "scripts": {
     "build:plugin": "npx -y esbuild src/emby.js --target=es2016 --format=cjs --outfile=emby.js && cp emby.js providers/emby.js",
@@ -9,7 +9,8 @@
     "build": "npm run build:plugin && npm run build:worker",
     "deploy:worker": "cd cloudflare-worker && npx wrangler deploy",
     "test": "node test/test-emby.js",
-    "debug": "node test/debug-cli.js"
+    "debug": "node test/debug-cli.js",
+    "audio-dl": "node emby-audio-downloader.js"
   },
   "author": "Omc725",
   "license": "MIT"

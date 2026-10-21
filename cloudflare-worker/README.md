@@ -5,7 +5,10 @@ Nuvio için Emby ve Jellyfin eklentisini internet üzerinden kişiselleştirilmi
 Bu servis sayesinde:
 - 📱 Nuvio'ya eklenti kurmadan önce web arayüzünden Emby veya Jellyfin sunucu adresinizi ve giriş bilgilerinizi girersiniz.
 - ⚡ Size özel, şifrelenmiş bir **Kişisel Manifest URL'si** ve **QR Kod** üretilir.
-- 🔍 Sunucunuzun Emby veya Jellyfin olduğu otomatik tespit edilir ve sürüm bilgisi doğrulanır.
+- 🔍 Sunucunuzun Emby veya Jellyfin olduğu ve kütüphaneleriniz ("Filmler", "Diziler", "Koleksiyonlar", "Oynatma Listeleri") otomatik tespit edilir.
+- 📂 **Katalog & Koleksiyon Keşfi:** Emby'deki "Benim Medyam" kütüphaneleriniz Nuvio'da doğrudan taranabilir kataloglar haline gelir.
+- 🎯 **Tür & Yıl Filtreleme:** Nuvio içinden Emby'deki gibi tür (Aksiyon, Komedi, Dram...) ve yıl (2025, 2024, 2020'ler, 2010'lar...) bazında anlık filtreleme yapılabilir.
+- 📦 **BoxSet (Koleksiyon) Desteği:** Film serisi koleksiyonları Nuvio'da tek başlık altında açılır ve tüm filmler bölümler halinde doğrudan oynatılabilir.
 - 🔒 **Sıfır Günlük & Güvenlik:** Bilgileriniz hiçbir veri tabanında tutulmaz. Yapılandırma doğrudan URL parametresi içinde Base64 olarak taşınır ve Nuvio oynatıcınıza dinamik olarak enjekte edilir.
 
 ---
@@ -54,3 +57,5 @@ Komut tamamlandığında terminal size canlı URL'nizi verecektir (örn: `https:
    - **Ayarlar (Settings)** > **Eklentiler (Plugins)** > **Eklenti Ekle (Add Plugin)** yolunu izleyin.
    - Kopyaladığınız adresi yapıştırın.
 7. Bitti! Artık Emby veya Jellyfin kütüphanenizdeki tüm dizi ve filmler Nuvio'da Direct Play ve Türkçe/İngilizce altyazı desteğiyle hazır!
+8. **Katalog & Koleksiyon Kullanımı:** Nuvio'nun **Keşfet (Discover / Kataloglar)** bölümüne girdiğinizde, Emby'deki "Filmler", "Diziler", "Koleksiyonlar" bölümleriniz ayrı ayrı listelenecektir. Bir kataloğa girdiğinizde üst kısımdaki filtre butonlarından **Tür** (Aksiyon, Komedi, Korku...) ve **Yıl** (2025, 2024, 2020'ler...) seçerek kütüphanenizi süzebilir, "Koleksiyonlar" altından film serilerini tek parça halinde açıp izleyebilirsiniz.
+

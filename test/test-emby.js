@@ -915,6 +915,68 @@ async function runTests() {
     console.log("✓ Test 14 Passed!\n");
   }
 
+  // TEST 15: Direct Emby Item ID (emby:item:12345 or emby:12345)
+  {
+    console.log("Test 15: Direct Emby Item ID resolution (instant playback, 0 search latency)...");
+    const mockEmbyUrl = "http://localhost:8096";
+    let searchCalled = false;
+    let playbackCalled = false;
+
+    const mockFetch = async (url) => {
+      const urlStr = String(url);
+
+      if (urlStr.includes("/Items?AnyProviderIdEquals=") || urlStr.includes("SearchTerm=")) {
+        searchCalled = true;
+        throw new Error("Search must not be called when ID is direct Emby ID!");
+      }
+
+      if (urlStr.includes("/System/Info/Public")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ServerName: "Emby Server", ProductName: "Emby Server" })
+        };
+      }
+
+      if (urlStr.includes("/Items/direct_item_999/PlaybackInfo")) {
+        playbackCalled = true;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            MediaSources: [
+              {
+                Id: "src_direct_999",
+                Container: "mkv",
+                MediaStreams: [{ Type: "Video", Height: 1080, Width: 1920 }]
+              }
+            ]
+          })
+        };
+      }
+
+      throw new Error(`Unexpected URL in Test 15: ${urlStr}`);
+    };
+
+    global.SCRAPER_SETTINGS = {
+      serverUrl: mockEmbyUrl,
+      apiKey: "test_key",
+      userId: "test_user"
+    };
+
+    const provider = loadProvider(mockFetch);
+    const streams = await provider.getStreams("emby:item:direct_item_999", "movie");
+
+    assert.strictEqual(searchCalled, false, "Search must NOT be called for direct Emby ID");
+    assert.strictEqual(playbackCalled, true, "PlaybackInfo must be called directly for direct_item_999");
+    assert.strictEqual(streams.length, 1);
+    assert(streams[0].url.includes("direct_item_999"));
+    assert(streams[0].url.includes("src_direct_999"));
+
+    delete global.SCRAPER_SETTINGS;
+    console.log("✓ Test 15 Passed!\n");
+  }
+
   console.log("🎉 ALL TESTS PASSED SUCCESSFULLY!");
 }
 

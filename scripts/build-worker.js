@@ -24,16 +24,16 @@ if (!fs.existsSync(WORKER_DIR)) {
 const embyJsContent = fs.readFileSync(EMBY_JS_PATH, 'utf8');
 const scraperManifestContent = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
 
-// Unified Manifest: Supports BOTH Stremio Addon (for rich multi-line card + BOYUT badge) AND Local Scraper
+// Unified Manifest: Supports BOTH Stremio Addon (Catalogs, Meta, Streams) AND Local Scraper
 const UNIFIED_MANIFEST = {
   id: "org.omc725.nuvioemby",
   name: "Emby / Jellyfin",
-  version: "3.5.0",
-  description: "Nuvio & Stremio doğrudan oynatma (Direct Play) eklentisi (Emby & Jellyfin)",
+  version: "3.6.0",
+  description: "Nuvio doğrudan oynatma (Direct Play), dinamik kütüphaneler ve koleksiyonlar eklentisi (Emby & Jellyfin)",
   logo: "https://emby.media/images/embyicon.png",
-  resources: ["stream"],
-  types: ["movie", "series", "tv"],
-  idPrefixes: ["tt", "tmdb:"],
+  resources: ["catalog", "meta", "stream"],
+  types: ["movie", "series"],
+  idPrefixes: ["tt", "tmdb:", "emby:"],
   catalogs: [],
   behaviorHints: {
     configurable: false,
@@ -419,14 +419,17 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       <div class="badge-row">
         <div class="badge">
           <span class="badge-dot"></span>
-          Emby & Jellyfin v3.5.0
+          Emby & Jellyfin v3.6.0
         </div>
         <div class="badge">
-          Nuvio & Stremio Direct Play
+          Dinamik Kataloglar & Koleksiyonlar
+        </div>
+        <div class="badge">
+          Direct Play
         </div>
       </div>
       <h1>Nuvio Emby & Jellyfin Yapılandırıcı</h1>
-      <p class="subtitle">Emby veya Jellyfin sunucunuzu bağlayın; Nuvio için zengin kart ve BOYUT rozeti destekli manifestinizi üretin.</p>
+      <p class="subtitle">Emby veya Jellyfin sunucunuzu bağlayın; Nuvio için kütüphane katalogları, tür/yıl filtreleri ve Direct Play destekli kişisel manifestinizi üretin.</p>
     </div>
 
     <!-- Yapılandırma Formu -->
@@ -523,9 +526,11 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       <h4 style="font-size: 0.95rem; font-weight: 700; margin-top: 1rem; color: #f1f5f9;">📲 Nuvio'ya Nasıl Eklenir? (Önemli)</h4>
       <ol class="steps-list">
         <li>Yukarıdaki URL'yi kopyalayın.</li>
-        <li>Nuvio uygulamasını açın ve <strong>Ayarlar (Settings) > Eklentiler (Addons / Plugins) > Eklenti Ekle (Add Addon)</strong> bölümüne gidin.</li>
+        <li>Nuvio uygulamasını açın ve <strong>Ayarlar (Settings) > Eklentiler (Addons) > Eklenti Ekle (Add Addon)</strong> bölümüne gidin.</li>
         <li>Kopyaladığınız manifest URL'sini yapıştırın ve <strong>Ekle</strong> butonuna basın.</li>
-        <li><strong>Tebrikler!</strong> Artık akış listenizde <code>1080p • 1920x1080</code>, <code>HEVC 10bit</code>, <code>DD+ 2.0</code>, <code>MKV • 3.0Mbps</code> ve <strong>[BOYUT 412 MB]</strong> rozetiyle zengin detaylı kartlar görüntülenecektir!</li>
+        <li><strong>📚 Kataloglar & Koleksiyonlar:</strong> Nuvio Ana Sayfası ve Keşfet sekmesinde tüm kütüphaneleriniz (<em>Filmler, Diziler, Koleksiyonlar</em>) otomatik satırlar halinde listelenir.</li>
+        <li><strong>🔍 Filtreleme:</strong> Bir kütüphaneye girdiğinizde Emby'deki tüm <strong>Türler (Genre)</strong> ve <strong>Yıllar (Year)</strong> üst menüden filtrelenebilir.</li>
+        <li><strong>🚀 Direct Play:</strong> İçerikleri transcode olmadan orijinal kalitesinde ve altyazılarıyla anında oynatın!</li>
       </ol>
     </div>
 
@@ -630,7 +635,18 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
         const res = await resp.json();
         if (res.ok) {
           const typeLabel = res.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby';
-          showStatus('success', '✅ <strong>Bağlantı Başarılı!</strong> Sunucu: ' + (res.serverName || typeLabel) + ' (' + (res.productName || typeLabel) + ' v' + (res.version || 'Bilinmiyor') + '), Kullanıcı: ' + (res.userName || data.username));
+          let libHtml = '';
+          if (res.libraries && res.libraries.length > 0) {
+            const pills = res.libraries.map(lib => {
+              let icon = '🎬';
+              if (lib.type === 'tvshows') icon = '📺';
+              else if (lib.type === 'boxsets') icon = '📦';
+              else if (lib.type === 'playlists') icon = '📑';
+              return '<span style="display:inline-block; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:999px; padding:0.2rem 0.6rem; font-size:0.75rem; margin:2px;">' + icon + ' ' + lib.name + '</span>';
+            }).join(' ');
+            libHtml = '<div style="margin-top:8px;"><strong>📚 Tespit Edilen Kütüphaneler:</strong><div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">' + pills + '</div></div>';
+          }
+          showStatus('success', '✅ <strong>Bağlantı Başarılı!</strong> Sunucu: ' + (res.serverName || typeLabel) + ' (' + (res.productName || typeLabel) + ' v' + (res.version || 'Bilinmiyor') + '), Kullanıcı: ' + (res.userName || data.username) + libHtml);
         } else {
           showStatus('error', '❌ <strong>Bağlantı Başarısız:</strong> ' + (res.error || 'Sunucuya erişilemedi.'));
         }
@@ -1011,9 +1027,14 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
 
   if (!apiKey) return [];
 
-  const idInfo = parseInputId(rawId, type);
-  const isSeries = idInfo.mediaType === "tv";
-  const itemType = isSeries ? "Series" : "Movie";
+  // Direct Emby ID support (from catalogs and collections)
+  let directTargetId = null;
+  if (/^emby:(item:)?([a-zA-Z0-9_\-]+)/i.test(rawId)) {
+    const match = rawId.match(/^emby:(item:)?([a-zA-Z0-9_\-]+)/i);
+    directTargetId = match[2];
+  }
+
+  let targetItemId = directTargetId;
 
   const apiHeaders = {
     'Accept': 'application/json',
@@ -1022,68 +1043,74 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
     'Authorization': \`MediaBrowser Token="\${apiKey}"\`
   };
 
-  // 2. Search item by ProviderId
-  let matchedItem = null;
-  const providerFormats = idInfo.isImdb
-    ? [\`imdb.\${idInfo.cleanId}\`, \`Imdb.\${idInfo.cleanId}\`]
-    : [\`tmdb.\${idInfo.cleanId}\`, \`Tmdb.\${idInfo.cleanId}\`];
+  if (!targetItemId) {
+    const idInfo = parseInputId(rawId, type);
+    const isSeries = idInfo.mediaType === "tv";
+    const itemType = isSeries ? "Series" : "Movie";
 
-  for (const prefix of [effectivePrefix, effectivePrefix === '' ? '/emby' : '']) {
-    if (matchedItem) break;
-    for (const pId of providerFormats) {
-      const url = \`\${serverUrl}\${prefix}/Users/\${userId}/Items?AnyProviderIdEquals=\${encodeURIComponent(pId)}&IncludeItemTypes=\${itemType}&Recursive=true&Fields=ProviderIds,Name,Id,MediaSources&api_key=\${encodeURIComponent(apiKey)}\`;
-      try {
-        const r = await fetch(url, { headers: apiHeaders });
-        if (r.ok) {
-          const d = await r.json();
-          if (d && Array.isArray(d.Items) && d.Items.length > 0) {
-            matchedItem = d.Items[0];
-            break;
+    // 2. Search item by ProviderId
+    let matchedItem = null;
+    const providerFormats = idInfo.isImdb
+      ? [\`imdb.\${idInfo.cleanId}\`, \`Imdb.\${idInfo.cleanId}\`]
+      : [\`tmdb.\${idInfo.cleanId}\`, \`Tmdb.\${idInfo.cleanId}\`];
+
+    for (const prefix of [effectivePrefix, effectivePrefix === '' ? '/emby' : '']) {
+      if (matchedItem) break;
+      for (const pId of providerFormats) {
+        const url = \`\${serverUrl}\${prefix}/Users/\${userId}/Items?AnyProviderIdEquals=\${encodeURIComponent(pId)}&IncludeItemTypes=\${itemType}&Recursive=true&Fields=ProviderIds,Name,Id,MediaSources&api_key=\${encodeURIComponent(apiKey)}\`;
+        try {
+          const r = await fetch(url, { headers: apiHeaders });
+          if (r.ok) {
+            const d = await r.json();
+            if (d && Array.isArray(d.Items) && d.Items.length > 0) {
+              matchedItem = d.Items[0];
+              break;
+            }
           }
-        }
-      } catch (e) {}
-    }
-  }
-
-  // Fallback: search /Items
-  if (!matchedItem) {
-    for (const pId of providerFormats) {
-      const url = \`\${serverUrl}/Items?AnyProviderIdEquals=\${encodeURIComponent(pId)}&IncludeItemTypes=\${itemType}&Recursive=true&Fields=ProviderIds,Name,Id,MediaSources&api_key=\${encodeURIComponent(apiKey)}\`;
-      try {
-        const r = await fetch(url, { headers: apiHeaders });
-        if (r.ok) {
-          const d = await r.json();
-          if (d && Array.isArray(d.Items) && d.Items.length > 0) {
-            matchedItem = d.Items[0];
-            break;
-          }
-        }
-      } catch (e) {}
-    }
-  }
-
-  if (!matchedItem) return [];
-
-  // 3. If Series, find target episode
-  let targetItemId = matchedItem.Id;
-  if (isSeries && idInfo.targetSeason && idInfo.targetEpisode) {
-    try {
-      const seasonsUrl = \`\${serverUrl}\${effectivePrefix}/Shows/\${matchedItem.Id}/Seasons?UserId=\${encodeURIComponent(userId)}&api_key=\${encodeURIComponent(apiKey)}\`;
-      const sRes = await fetch(seasonsUrl, { headers: apiHeaders });
-      if (sRes.ok) {
-        const sData = await sRes.json();
-        const season = (sData.Items || []).find(s => s.IndexNumber === idInfo.targetSeason);
-        if (season) {
-          const epUrl = \`\${serverUrl}\${effectivePrefix}/Shows/\${matchedItem.Id}/Episodes?SeasonId=\${encodeURIComponent(season.Id)}&UserId=\${encodeURIComponent(userId)}&Fields=MediaSources,Name,Id,IndexNumber,ParentIndexNumber&api_key=\${encodeURIComponent(apiKey)}\`;
-          const epRes = await fetch(epUrl, { headers: apiHeaders });
-          if (epRes.ok) {
-            const epData = await epRes.json();
-            const episode = (epData.Items || []).find(ep => ep.IndexNumber === idInfo.targetEpisode && ep.ParentIndexNumber === idInfo.targetSeason);
-            if (episode) targetItemId = episode.Id;
-          }
-        }
+        } catch (e) {}
       }
-    } catch (e) {}
+    }
+
+    // Fallback: search /Items
+    if (!matchedItem) {
+      for (const pId of providerFormats) {
+        const url = \`\${serverUrl}/Items?AnyProviderIdEquals=\${encodeURIComponent(pId)}&IncludeItemTypes=\${itemType}&Recursive=true&Fields=ProviderIds,Name,Id,MediaSources&api_key=\${encodeURIComponent(apiKey)}\`;
+        try {
+          const r = await fetch(url, { headers: apiHeaders });
+          if (r.ok) {
+            const d = await r.json();
+            if (d && Array.isArray(d.Items) && d.Items.length > 0) {
+              matchedItem = d.Items[0];
+              break;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (!matchedItem) return [];
+
+    // 3. If Series, find target episode
+    targetItemId = matchedItem.Id;
+    if (isSeries && idInfo.targetSeason && idInfo.targetEpisode) {
+      try {
+        const seasonsUrl = \`\${serverUrl}\${effectivePrefix}/Shows/\${matchedItem.Id}/Seasons?UserId=\${encodeURIComponent(userId)}&api_key=\${encodeURIComponent(apiKey)}\`;
+        const sRes = await fetch(seasonsUrl, { headers: apiHeaders });
+        if (sRes.ok) {
+          const sData = await sRes.json();
+          const season = (sData.Items || []).find(s => s.IndexNumber === idInfo.targetSeason);
+          if (season) {
+            const epUrl = \`\${serverUrl}\${effectivePrefix}/Shows/\${matchedItem.Id}/Episodes?SeasonId=\${encodeURIComponent(season.Id)}&UserId=\${encodeURIComponent(userId)}&Fields=MediaSources,Name,Id,IndexNumber,ParentIndexNumber&api_key=\${encodeURIComponent(apiKey)}\`;
+            const epRes = await fetch(epUrl, { headers: apiHeaders });
+            if (epRes.ok) {
+              const epData = await epRes.json();
+              const episode = (epData.Items || []).find(ep => ep.IndexNumber === idInfo.targetEpisode && ep.ParentIndexNumber === idInfo.targetSeason);
+              if (episode) targetItemId = episode.Id;
+            }
+          }
+        }
+      } catch (e) {}
+    }
   }
 
   // 4. Get PlaybackInfo
@@ -1180,6 +1207,430 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
       subtitles: subtitles
     };
   });
+}
+
+// Caches for auth and catalogs in Cloudflare Worker
+const authInfoCache = new Map();
+const catalogsCache = new Map();
+
+async function getEmbyAuthAndInfo(config) {
+  let serverUrl = (config.serverUrl || '').trim().replace(/\\/+$/, '');
+  const username = (config.username || '').trim();
+  const password = config.password || '';
+  let apiKey = (config.apiKey || '').trim();
+  let userId = (config.userId || '').trim();
+
+  if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
+    serverUrl = 'http://' + serverUrl;
+  }
+
+  const cacheKey = \`\${serverUrl}:\${username || apiKey}\`;
+  const now = Date.now();
+  if (authInfoCache.has(cacheKey)) {
+    const cached = authInfoCache.get(cacheKey);
+    if (now - cached.timestamp < 30 * 60 * 1000) return cached;
+  }
+
+  let effectivePrefix = '';
+  let serverType = config.serverType || 'emby';
+  let serverName = 'Emby Server';
+
+  for (const prefix of ['', '/emby']) {
+    try {
+      const r = await fetch(\`\${serverUrl}\${prefix}/System/Info/Public\`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (r.ok) {
+        const info = await r.json();
+        effectivePrefix = prefix;
+        const prod = ((info && (info.ProductName || info.ServerName)) || '').toLowerCase();
+        if (prod.includes('jellyfin')) {
+          serverType = 'jellyfin';
+          effectivePrefix = '';
+        }
+        serverName = info.ServerName || (serverType === 'jellyfin' ? 'Jellyfin Server' : 'Emby Server');
+        break;
+      }
+    } catch (e) {}
+  }
+
+  if (!apiKey && username) {
+    const authHeaders = {
+      'Content-Type': 'application/json',
+      'X-Emby-Authorization': 'MediaBrowser Client="Nuvio Worker", Device="Serverless", DeviceId="nuvio-worker", Version="3.6.0"',
+      'Authorization': 'MediaBrowser Client="Nuvio Worker", Device="Serverless", DeviceId="nuvio-worker", Version="3.6.0"'
+    };
+
+    const authEndpoints = [\`\${serverUrl}\${effectivePrefix}/Users/AuthenticateByName\`];
+    if (effectivePrefix !== '') authEndpoints.push(\`\${serverUrl}/Users/AuthenticateByName\`);
+    else authEndpoints.push(\`\${serverUrl}/emby/Users/AuthenticateByName\`);
+
+    for (const aUrl of authEndpoints) {
+      try {
+        const authRes = await fetch(aUrl, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ Username: username, Pw: password })
+        });
+        if (authRes.ok) {
+          const authData = await authRes.json();
+          apiKey = authData.AccessToken || '';
+          userId = (authData.User && authData.User.Id) || '';
+          break;
+        }
+      } catch (e) {}
+    }
+  }
+
+  const res = {
+    serverUrl,
+    prefix: effectivePrefix,
+    serverType,
+    serverName,
+    apiKey,
+    userId,
+    timestamp: now
+  };
+
+  if (apiKey && userId) {
+    authInfoCache.set(cacheKey, res);
+  }
+  return res;
+}
+
+function parseExtraArgs(extraStr, searchParams) {
+  const result = {};
+  if (extraStr) {
+    const pairs = extraStr.split('&');
+    for (const pair of pairs) {
+      const idx = pair.indexOf('=');
+      if (idx !== -1) {
+        const k = decodeURIComponent(pair.substring(0, idx)).toLowerCase();
+        const v = decodeURIComponent(pair.substring(idx + 1));
+        result[k] = v;
+      }
+    }
+  }
+  if (searchParams) {
+    for (const [k, v] of searchParams.entries()) {
+      result[k.toLowerCase()] = v;
+    }
+  }
+  return result;
+}
+
+function formatEmbyItemToMeta(item, authInfo, defaultType) {
+  const isBoxset = item.Type === 'BoxSet';
+  const isSeries = item.Type === 'Series' || defaultType === 'series';
+  const isPlaylist = item.Type === 'Playlist';
+
+  let id = \`emby:item:\${item.Id}\`;
+  if (isBoxset) {
+    id = \`emby:boxset:\${item.Id}\`;
+  } else if (isPlaylist) {
+    id = \`emby:playlist:\${item.Id}\`;
+  } else if (item.ProviderIds && item.ProviderIds.Imdb) {
+    const imdb = String(item.ProviderIds.Imdb).trim();
+    id = imdb.startsWith('tt') ? imdb : \`tt\${imdb}\`;
+  } else if (item.ProviderIds && item.ProviderIds.Tmdb) {
+    id = \`tmdb:\${item.ProviderIds.Tmdb}\`;
+  }
+
+  const poster = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${item.Id}/Images/Primary?api_key=\${encodeURIComponent(authInfo.apiKey)}&maxWidth=400\`;
+  const background = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${item.Id}/Images/Backdrop?api_key=\${encodeURIComponent(authInfo.apiKey)}&maxWidth=1280\`;
+
+  return {
+    id,
+    type: (isBoxset || isSeries) ? 'series' : 'movie',
+    name: item.Name,
+    poster,
+    background,
+    posterShape: 'poster',
+    releaseInfo: item.ProductionYear ? String(item.ProductionYear) : undefined,
+    description: item.Overview || undefined,
+    genres: item.Genres || []
+  };
+}
+
+function getDefaultCatalogs() {
+  const standardYears = [
+    "2026", "2025", "2024", "2023", "2022", "2021", "2020",
+    "2019", "2018", "2017", "2016", "2015", "2010s", "2000s", "1990s"
+  ];
+  return [
+    {
+      type: "movie",
+      id: "emby_all_movies",
+      name: "Emby / Jellyfin Filmler",
+      extra: [
+        { name: "genre", options: ["Aksiyon", "Gerilim", "Suç", "Macera", "Korku", "Gizem", "Dram", "Romantik", "Fantastik", "Komedi", "Bilim-Kurgu", "Animasyon", "Aile", "Belgesel"], isRequired: false },
+        { name: "year", options: standardYears, isRequired: false },
+        { name: "search", isRequired: false },
+        { name: "skip", isRequired: false }
+      ]
+    },
+    {
+      type: "series",
+      id: "emby_all_series",
+      name: "Emby / Jellyfin Diziler",
+      extra: [
+        { name: "genre", options: ["Aksiyon", "Gerilim", "Suç", "Macera", "Korku", "Gizem", "Dram", "Romantik", "Komedi", "Bilim-Kurgu", "Animasyon"], isRequired: false },
+        { name: "year", options: standardYears, isRequired: false },
+        { name: "search", isRequired: false },
+        { name: "skip", isRequired: false }
+      ]
+    }
+  ];
+}
+
+async function getEmbyCatalogs(authInfo) {
+  if (!authInfo || !authInfo.apiKey || !authInfo.userId) return getDefaultCatalogs();
+
+  const cacheKey = \`\${authInfo.serverUrl}:\${authInfo.userId}\`;
+  const now = Date.now();
+  if (catalogsCache.has(cacheKey)) {
+    const cached = catalogsCache.get(cacheKey);
+    if (now - cached.timestamp < 30 * 60 * 1000) return cached.catalogs;
+  }
+
+  try {
+    const viewsUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Views?api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
+    const vRes = await fetch(viewsUrl, { headers: { 'Accept': 'application/json' } });
+    if (!vRes.ok) return getDefaultCatalogs();
+    const vData = await vRes.json();
+    const views = vData.Items || [];
+    if (views.length === 0) return getDefaultCatalogs();
+
+    const standardYears = [
+      "2026", "2025", "2024", "2023", "2022", "2021", "2020",
+      "2019", "2018", "2017", "2016", "2015", "2014", "2013",
+      "2012", "2011", "2010", "2000s", "1990s", "1980s", "1970s"
+    ];
+
+    const catalogs = [];
+    for (const v of views) {
+      const colType = (v.CollectionType || '').toLowerCase();
+      const isTv = colType === 'tvshows';
+      const isBoxset = colType === 'boxsets';
+      const type = isTv ? 'series' : 'movie';
+
+      let genres = [];
+      try {
+        const gUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Genres?ParentId=\${v.Id}&UserId=\${authInfo.userId}&api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
+        const gRes = await fetch(gUrl, { headers: { 'Accept': 'application/json' } });
+        if (gRes.ok) {
+          const gData = await gRes.json();
+          genres = (gData.Items || []).map(g => g.Name).filter(Boolean);
+        }
+      } catch (e) {}
+
+      const extra = [
+        { name: "search", isRequired: false },
+        { name: "skip", isRequired: false }
+      ];
+
+      if (genres.length > 0) {
+        extra.unshift({ name: "genre", options: genres, isRequired: false });
+      }
+
+      if (!isBoxset && (colType === 'movies' || colType === 'tvshows' || colType === '')) {
+        extra.splice(genres.length > 0 ? 1 : 0, 0, { name: "year", options: standardYears, isRequired: false });
+      }
+
+      catalogs.push({
+        type,
+        id: \`emby_lib_\${v.Id}\`,
+        name: v.Name,
+        extra
+      });
+    }
+
+    if (catalogs.length > 0) {
+      catalogsCache.set(cacheKey, { catalogs, timestamp: now });
+      return catalogs;
+    }
+  } catch (err) {}
+
+  return getDefaultCatalogs();
+}
+
+async function resolveCatalog(config, catalogType, catalogId, extraStr, searchParams) {
+  const authInfo = await getEmbyAuthAndInfo(config);
+  if (!authInfo || !authInfo.apiKey || !authInfo.userId) return { metas: [] };
+
+  const extraArgs = parseExtraArgs(extraStr, searchParams);
+  const genre = extraArgs.genre;
+  const year = extraArgs.year;
+  const search = extraArgs.search;
+  const skip = Number(extraArgs.skip) || 0;
+
+  const viewMatch = catalogId.match(/^emby_lib_([a-zA-Z0-9_\-]+)$/);
+  const viewId = viewMatch ? viewMatch[1] : null;
+
+  const isTv = catalogType === 'series';
+  let queryParams = [
+    'Recursive=true',
+    \`api_key=\${encodeURIComponent(authInfo.apiKey)}\`,
+    'Fields=Genres,ProductionYear,ProviderIds,Overview,PrimaryImageAspectRatio,PremiereDate',
+    \`StartIndex=\${skip}\`,
+    'Limit=50'
+  ];
+
+  if (viewId) {
+    queryParams.push(\`ParentId=\${encodeURIComponent(viewId)}\`);
+  }
+
+  if (isTv) {
+    queryParams.push('IncludeItemTypes=Series');
+  } else {
+    queryParams.push('IncludeItemTypes=Movie,BoxSet,Playlist');
+  }
+
+  if (genre) {
+    queryParams.push(\`Genres=\${encodeURIComponent(genre)}\`);
+  }
+
+  if (year) {
+    const decadeMatch = String(year).match(/^(\d{4})s$/i);
+    if (decadeMatch) {
+      const startYear = parseInt(decadeMatch[1], 10);
+      const yearsArr = [];
+      for (let y = startYear; y < startYear + 10; y++) yearsArr.push(y);
+      queryParams.push(\`Years=\${yearsArr.join(',')}\`);
+    } else {
+      queryParams.push(\`Years=\${encodeURIComponent(year)}\`);
+    }
+  }
+
+  if (search) {
+    queryParams.push(\`SearchTerm=\${encodeURIComponent(search)}\`);
+    queryParams.push('SortBy=SortName');
+    queryParams.push('SortOrder=Ascending');
+  } else {
+    queryParams.push('SortBy=DateCreated,SortName');
+    queryParams.push('SortOrder=Descending');
+  }
+
+  const url = \`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Items?\${queryParams.join('&')}\`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'X-Emby-Token': authInfo.apiKey,
+        'X-MediaBrowser-Token': authInfo.apiKey
+      }
+    });
+
+    if (!res.ok) return { metas: [] };
+    const data = await res.json();
+    const metas = (data.Items || []).map(item => formatEmbyItemToMeta(item, authInfo, catalogType));
+    return { metas };
+  } catch (e) {
+    return { metas: [] };
+  }
+}
+
+async function resolveMeta(config, metaType, rawId) {
+  const authInfo = await getEmbyAuthAndInfo(config);
+  if (!authInfo || !authInfo.apiKey || !authInfo.userId) return { meta: null };
+
+  const apiHeaders = {
+    'Accept': 'application/json',
+    'X-Emby-Token': authInfo.apiKey,
+    'X-MediaBrowser-Token': authInfo.apiKey
+  };
+
+  // 1. BoxSet: emby:boxset:12345
+  if (rawId.startsWith('emby:boxset:')) {
+    const boxsetId = rawId.replace('emby:boxset:', '');
+    try {
+      const bRes = await fetch(\`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Items/\${boxsetId}?api_key=\${encodeURIComponent(authInfo.apiKey)}\`, { headers: apiHeaders });
+      if (!bRes.ok) return { meta: null };
+      const boxset = await bRes.json();
+
+      const cRes = await fetch(\`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Items?ParentId=\${boxsetId}&Fields=Genres,ProductionYear,Overview,ProviderIds,PremiereDate&api_key=\${encodeURIComponent(authInfo.apiKey)}\`, { headers: apiHeaders });
+      const cData = cRes.ok ? await cRes.json() : { Items: [] };
+      const children = cData.Items || [];
+
+      const poster = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${boxset.Id}/Images/Primary?api_key=\${encodeURIComponent(authInfo.apiKey)}&maxWidth=400\`;
+      const background = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${boxset.Id}/Images/Backdrop?api_key=\${encodeURIComponent(authInfo.apiKey)}&maxWidth=1280\`;
+
+      const videos = children.map((c, idx) => ({
+        id: \`emby:item:\${c.Id}\`,
+        title: \`\${c.Name}\${c.ProductionYear ? \` (\${c.ProductionYear})\` : ''}\`,
+        season: 1,
+        episode: idx + 1,
+        released: c.PremiereDate || (c.ProductionYear ? \`\${c.ProductionYear}-01-01\` : undefined),
+        overview: c.Overview
+      }));
+
+      return {
+        meta: {
+          id: rawId,
+          type: 'series',
+          name: boxset.Name,
+          poster,
+          background,
+          posterShape: 'poster',
+          description: boxset.Overview || 'Emby / Jellyfin Koleksiyonu',
+          genres: boxset.Genres || [],
+          videos
+        }
+      };
+    } catch (e) {
+      return { meta: null };
+    }
+  }
+
+  // 2. Direct Emby Item: emby:item:12345 or emby:12345
+  if (rawId.startsWith('emby:item:') || rawId.startsWith('emby:')) {
+    const itemId = rawId.replace(/^emby:(item:)?/, '');
+    try {
+      const iRes = await fetch(\`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Items/\${itemId}?api_key=\${encodeURIComponent(authInfo.apiKey)}\`, { headers: apiHeaders });
+      if (!iRes.ok) return { meta: null };
+      const item = await iRes.json();
+
+      const poster = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${item.Id}/Images/Primary?api_key=\${encodeURIComponent(authInfo.apiKey)}&maxWidth=400\`;
+      const background = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${item.Id}/Images/Backdrop?api_key=\${encodeURIComponent(authInfo.apiKey)}&maxWidth=1280\`;
+
+      const isSeries = item.Type === 'Series';
+      let videos = undefined;
+
+      if (isSeries) {
+        const epRes = await fetch(\`\${authInfo.serverUrl}\${authInfo.prefix}/Shows/\${itemId}/Episodes?UserId=\${authInfo.userId}&Fields=MediaSources,Name,Id,IndexNumber,ParentIndexNumber,PremiereDate,Overview&api_key=\${encodeURIComponent(authInfo.apiKey)}\`, { headers: apiHeaders });
+        if (epRes.ok) {
+          const epData = await epRes.json();
+          videos = (epData.Items || []).map(ep => ({
+            id: \`emby:item:\${ep.Id}\`,
+            title: ep.Name || \`Bölüm \${ep.IndexNumber}\`,
+            season: ep.ParentIndexNumber !== undefined ? ep.ParentIndexNumber : 1,
+            episode: ep.IndexNumber !== undefined ? ep.IndexNumber : 1,
+            released: ep.PremiereDate,
+            overview: ep.Overview
+          }));
+        }
+      }
+
+      return {
+        meta: {
+          id: rawId,
+          type: isSeries ? 'series' : 'movie',
+          name: item.Name,
+          poster,
+          background,
+          posterShape: 'poster',
+          releaseInfo: item.ProductionYear ? String(item.ProductionYear) : undefined,
+          description: item.Overview || undefined,
+          genres: item.Genres || [],
+          videos
+        }
+      };
+    } catch (e) {
+      return { meta: null };
+    }
+  }
+
+  return { meta: null };
 }
 
 export default {
@@ -1279,6 +1730,23 @@ export default {
           }
         }
 
+        let libraries = [];
+        if (authResult && authResult.User && authResult.AccessToken) {
+          try {
+            const vRes = await fetch(\`\${serverUrl}\${effectivePrefix}/Users/\${authResult.User.Id}/Views?api_key=\${encodeURIComponent(authResult.AccessToken)}\`, {
+              headers: { 'Accept': 'application/json' }
+            });
+            if (vRes.ok) {
+              const vData = await vRes.json();
+              libraries = (vData.Items || []).map(v => ({
+                id: v.Id,
+                name: v.Name,
+                type: (v.CollectionType || v.Type || '').toLowerCase()
+              }));
+            }
+          } catch (e) {}
+        }
+
         const serverDisplayName = serverType === 'jellyfin' ? 'Jellyfin Server' : 'Emby Server';
         return new Response(JSON.stringify({
           ok: true,
@@ -1286,7 +1754,8 @@ export default {
           serverName: info.ServerName || serverDisplayName,
           productName: info.ProductName || serverDisplayName,
           version: info.Version || 'Bilinmiyor',
-          userName: authResult && authResult.User ? authResult.User.Name : username
+          userName: authResult && authResult.User ? authResult.User.Name : username,
+          libraries: libraries
         }), {
           status: 200,
           headers: corsHeaders({ 'Content-Type': 'application/json; charset=utf-8' })
@@ -1331,7 +1800,72 @@ export default {
       });
     }
 
-    // 4. Stremio Addon Stream Resolution: /:config/stream/:type/:id.json
+    // 4. Stremio / Nuvio Catalog Resolution: /:config/catalog/:type/:id.json or /:config/catalog/:type/:id/:extra.json
+    const catalogMatch = pathname.match(/^\\/([^\\/]+)\\/catalog\\/([^\\/]+)\\/([^\\/]+?)(?:\\/(.+))?\\.json$/);
+    if (catalogMatch) {
+      const configToken = catalogMatch[1];
+      const catalogType = catalogMatch[2];
+      const catalogId = catalogMatch[3];
+      const extraStr = catalogMatch[4] ? decodeURIComponent(catalogMatch[4]) : '';
+
+      const userConfig = decodeBase64Url(configToken);
+      if (!userConfig) {
+        return new Response(JSON.stringify({ metas: [] }), {
+          status: 400,
+          headers: corsHeaders({ 'Content-Type': 'application/json; charset=utf-8' })
+        });
+      }
+
+      try {
+        const catalogRes = await resolveCatalog(userConfig, catalogType, catalogId, extraStr, url.searchParams);
+        return new Response(JSON.stringify(catalogRes), {
+          status: 200,
+          headers: corsHeaders({
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'public, max-age=60'
+          })
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ metas: [] }), {
+          status: 200,
+          headers: corsHeaders({ 'Content-Type': 'application/json; charset=utf-8' })
+        });
+      }
+    }
+
+    // 5. Stremio / Nuvio Meta Resolution: /:config/meta/:type/:id.json
+    const metaMatch = pathname.match(/^\\/([^\\/]+)\\/meta\\/([^\\/]+)\\/([^\\/]+)\\.json$/);
+    if (metaMatch) {
+      const configToken = metaMatch[1];
+      const metaType = metaMatch[2];
+      const rawId = decodeURIComponent(metaMatch[3]);
+
+      const userConfig = decodeBase64Url(configToken);
+      if (!userConfig) {
+        return new Response(JSON.stringify({ meta: null }), {
+          status: 400,
+          headers: corsHeaders({ 'Content-Type': 'application/json; charset=utf-8' })
+        });
+      }
+
+      try {
+        const metaRes = await resolveMeta(userConfig, metaType, rawId);
+        return new Response(JSON.stringify(metaRes), {
+          status: 200,
+          headers: corsHeaders({
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'public, max-age=300'
+          })
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ meta: null }), {
+          status: 200,
+          headers: corsHeaders({ 'Content-Type': 'application/json; charset=utf-8' })
+        });
+      }
+    }
+
+    // 6. Stremio Addon Stream Resolution: /:config/stream/:type/:id.json
     const streamMatch = pathname.match(/^\\/([^\\/]+)\\/stream\\/([^\\/]+)\\/([^\\/]+)\\.json$/);
     if (streamMatch) {
       const configToken = streamMatch[1];
@@ -1363,7 +1897,7 @@ export default {
       }
     }
 
-    // 5. Dynamic Path with Config: /:config/manifest.json or /:config/(providers/)?emby.js
+    // 7. Dynamic Path with Config: /:config/manifest.json or /:config/(providers/)?emby.js
     const pathParts = pathname.split('/').filter(Boolean);
     if (pathParts.length >= 2) {
       const configToken = pathParts[0];
@@ -1380,12 +1914,20 @@ export default {
       // Personalized Manifest (Stremio + Nuvio Scraper)
       if (remainingPath === 'manifest.json') {
         const customManifest = JSON.parse(JSON.stringify(BASE_MANIFEST));
-        const displayName = (userConfig.serverType === 'jellyfin' || (userConfig.serverUrl && userConfig.serverUrl.toLowerCase().includes('jellyfin'))) ? 'Jellyfin' : 'Emby';
+        let authInfo = null;
+        try {
+          authInfo = await getEmbyAuthAndInfo(userConfig);
+        } catch (e) {}
+
+        const serverType = (authInfo && authInfo.serverType) || ((userConfig.serverType === 'jellyfin' || (userConfig.serverUrl && userConfig.serverUrl.toLowerCase().includes('jellyfin'))) ? 'jellyfin' : 'emby');
+        const displayName = serverType === 'jellyfin' ? 'Jellyfin' : 'Emby';
+
         if (userConfig.username) {
           customManifest.name = \`\${displayName} (\${userConfig.username})\`;
         } else {
           customManifest.name = displayName;
         }
+
         if (customManifest.scrapers && customManifest.scrapers.length > 0) {
           customManifest.scrapers[0].hasSettings = false;
           customManifest.scrapers[0].name = displayName;
@@ -1394,11 +1936,24 @@ export default {
           }
         }
 
+        // Dynamically load user's Emby libraries as catalogs with genres & years
+        if (authInfo) {
+          try {
+            const catalogs = await getEmbyCatalogs(authInfo);
+            if (catalogs && catalogs.length > 0) {
+              customManifest.catalogs = catalogs;
+            }
+          } catch (e) {}
+        }
+        if (!customManifest.catalogs || customManifest.catalogs.length === 0) {
+          customManifest.catalogs = getDefaultCatalogs();
+        }
+
         return new Response(JSON.stringify(customManifest, null, 2), {
           status: 200,
           headers: corsHeaders({
             'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'public, max-age=3600'
+            'Cache-Control': 'public, max-age=600'
           })
         });
       }

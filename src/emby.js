@@ -1,5 +1,5 @@
 /**
- * Nuvio Emby & Jellyfin Media Provider (v3.5.0)
+ * Nuvio Emby & Jellyfin Media Provider (v3.6.0)
  * 
  * Direct Play provider connecting to local or remote Emby and Jellyfin servers.
  * Features:
@@ -58,7 +58,7 @@ function sendRemoteLog(step, message, data) {
 
 // Eklenti yüklendiğinde anında uzak log gönder
 try {
-  sendRemoteLog("INIT", "emby.js (v3.5.0) Emby & Jellyfin Provider yüklendi", {
+  sendRemoteLog("INIT", "emby.js (v3.6.0) Emby & Jellyfin Provider yüklendi", {
     hasGlobalThis: typeof globalThis !== "undefined",
     hasSettings: typeof globalThis !== "undefined" && Boolean(globalThis.SCRAPER_SETTINGS)
   });
@@ -383,8 +383,15 @@ function parseInputId(id, season, episode) {
     raw = String(id || "").trim();
   }
 
+  let isDirectEmby = false;
+  if (/^emby:(item:)?([a-zA-Z0-9_\-]+)/i.test(raw)) {
+    const match = raw.match(/^emby:(item:)?([a-zA-Z0-9_\-]+)/i);
+    raw = match[2];
+    isDirectEmby = true;
+  }
+
   // Stremio kolon formatı ayrıştırması
-  if (raw.includes(":")) {
+  if (!isDirectEmby && raw.includes(":")) {
     const parts = raw.split(":");
     const firstPart = parts[0].toLowerCase();
     if (firstPart === "tmdb" || firstPart === "imdb" || firstPart === "movie" || firstPart === "tv" || firstPart === "series") {
@@ -403,13 +410,14 @@ function parseInputId(id, season, episode) {
   }
 
   raw = raw.replace(/^(tmdb|imdb|movie|tv|series):/i, "").trim();
-  const isImdb = /^tt\d+/i.test(raw);
+  const isImdb = !isDirectEmby && /^tt\d+/i.test(raw);
 
   return {
     cleanId: raw,
     season: parsedSeason,
     episode: parsedEpisode,
-    isImdb
+    isImdb,
+    isDirectEmby
   };
 }
 
@@ -769,7 +777,7 @@ async function authenticateEmby(serverUrl, username, password, logFn) {
     };
   }
 
-  const authHeader = 'MediaBrowser Client="Nuvio", Device="Nuvio Player", DeviceId="nuvio-emby-player", Version="3.5.0"';
+  const authHeader = 'MediaBrowser Client="Nuvio", Device="Nuvio Player", DeviceId="nuvio-emby-player", Version="3.6.0"';
   const endpoints = [
     `${serverUrl}/Users/AuthenticateByName`,
     `${serverUrl}/emby/Users/AuthenticateByName`
@@ -1157,7 +1165,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
   const targetSeason = idInfo.season !== undefined ? idInfo.season : season;
   const targetEpisode = idInfo.episode !== undefined ? idInfo.episode : episode;
 
-  log(`v3.5.0 çalıştı (ID: ${JSON.stringify(tmdbId)} -> ${idInfo.cleanId}, Tür: ${detectedMediaType}, S: ${targetSeason}, E: ${targetEpisode})`);
+  log(`v3.6.0 çalıştı (ID: ${JSON.stringify(tmdbId)} -> ${idInfo.cleanId}, Tür: ${detectedMediaType}, S: ${targetSeason}, E: ${targetEpisode})`);
 
   sendRemoteLog("GET_STREAMS", `getStreams çağrıldı: ID=${JSON.stringify(tmdbId)} (${idInfo.cleanId})`, {
     rawId: tmdbId,
@@ -1234,7 +1242,12 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     let matchedItemName = "";
     let matchedItemYear = "";
 
-    if (isTv) {
+    if (idInfo.isDirectEmby && idInfo.cleanId) {
+      targetItemId = idInfo.cleanId;
+      matchedItemName = "Emby / Jellyfin Medya";
+      log(`Doğrudan Emby/Jellyfin Item ID kullanılıyor: ${targetItemId}`);
+      sendRemoteLog("DIRECT_ITEM", `Doğrudan Item ID kullanıldı: ${targetItemId}`);
+    } else if (isTv) {
       const seasonNum = targetSeason !== undefined ? targetSeason : 1;
       const episodeNum = targetEpisode !== undefined ? targetEpisode : 1;
 

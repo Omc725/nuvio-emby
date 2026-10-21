@@ -9,12 +9,19 @@ Bu eklenti, Nuvio'nun cihaz üzerindeki yerleşik **QuickJS (sandboxed ES2020)**
 ## 🚀 Özellikler
 
 - **Çift Sunucu Desteği & Otomatik Algılama (Auto-Detection):** Emby ve Jellyfin sunucularını otomatik tanır. Sunucu türünüze göre API yollarını (Jellyfin root `/Videos/...` ve Emby `/emby/...`) ve kimlik doğrulama başlıklarını dinamik olarak ayarlar; kullanıcı müdahalesi veya ayrı eklenti gerektirmez.
-- **Direct Play (Doğrudan Oynatma):** Sunucu üzerinde transcode yapmadan orijinal video ve ses kalitesinde doğrudan oynatma URL'leri üretir.
+- **Dinamik Kütüphane ve Katalog Entegrasyonu (Benim Medyam):** Emby / Jellyfin sunucunuzdaki tüm kütüphaneler ("Filmler", "Diziler", "Koleksiyonlar", "Oynatma Listeleri") Nuvio içerisinde taranabilir ve keşfedilebilir kataloglar olarak listelenir.
+- **Koleksiyon İçi Filtreleme (Tür & Yıl):** Her katalog içinde Emby'deki gibi derinlemesine filtreleme desteği:
+  - **Tür (Genre):** Aksiyon, Komedi, Dram, Bilim Kurgu, Animasyon vb.
+  - **Yıl (Year):** 2025, 2024, 2023, 2022, 2020'ler, 2010'lar, 2000'ler, 1990'lar, 1980'ler.
+  - **Arama (Search) & Sayfalama (Pagination):** Katalog içinde anlık arama ve kesintisiz kaydırma desteği.
+- **Koleksiyonlar (BoxSet) Desteği:** Emby film serileri ve boxset koleksiyonları Nuvio'da açıldığında, koleksiyonun tüm filmleri liste halinde listelenir ve tek tıkla doğrudan oynatılır.
+- **Direct Play (Doğrudan Oynatma) & 0 Gecikme:** Sunucu üzerinde transcode yapmadan orijinal video ve ses kalitesinde doğrudan oynatma URL'leri üretir. Katalogdan başlatılan içerikler arama yapmadan anında doğrudan oynatılır.
 - **Dinamik Kalite & Başlık Tespiti:** HEVC, H.264, VP9 gibi video codec'lerini, 5.1/7.1 ses kanallarını ve bitrate bilgisini ayrıştırarak `Direct Play • HEVC • 5.1 AC3 (24 Mbps)` formatında açıklayıcı başlıklar sunar.
 - **Akıllı ID Desteği:**
+  - Emby / Jellyfin Item ID (örn: `emby:item:12345` veya `emby:boxset:6789`)
   - TMDB ID (örn: `550`)
   - IMDb ID (örn: `tt0137523`)
-  - Her iki kimlik tipi için otomatik önceliklendirme ve geri dönüş (fallback) mekanizması.
+  - Otomatik önceliklendirme ve geri dönüş (fallback) mekanizması.
 - **Dizi ve Film Desteği:** Hem filmleri hem de `tv` / `series` içeriklerini sezon ve bölüm (`SxxExx`) eşleştirmesi ile çözer.
 - **Gelişmiş Altyazı Desteği:**
   - Harici (`IsExternal: true`) veya web uyumlu (`srt`, `vtt`, `subrip`) altyazıları otomatik ayıklar.
