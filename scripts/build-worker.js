@@ -523,14 +523,23 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
         <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.65rem;">Android TV veya telefon kamerasından kolayca taratabilirsiniz</span>
       </div>
 
-      <h4 style="font-size: 0.95rem; font-weight: 700; margin-top: 1rem; color: #f1f5f9;">📲 Nuvio'ya Nasıl Eklenir? (Önemli)</h4>
+      <h4 style="font-size: 0.95rem; font-weight: 700; margin-top: 1rem; color: #f1f5f9;">📲 Nuvio'ya Nasıl Eklenir? (Önemli: Addon Olarak Ekleyin)</h4>
+      <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 0.75rem; margin-bottom: 0.85rem; font-size: 0.8rem; color: #93c5fd;">
+        💡 <strong>Dikkat:</strong> Katalogların ve koleksiyonların Nuvio'da görünebilmesi için bu bağlantıyı <em>Plugin/Scraper</em> olarak değil, <strong>Stremio Addon</strong> olarak eklemeniz gerekmektedir.
+      </div>
       <ol class="steps-list">
         <li>Yukarıdaki URL'yi kopyalayın.</li>
         <li>Nuvio uygulamasını açın ve <strong>Ayarlar (Settings) > Eklentiler (Addons) > Eklenti Ekle (Add Addon)</strong> bölümüne gidin.</li>
         <li>Kopyaladığınız manifest URL'sini yapıştırın ve <strong>Ekle</strong> butonuna basın.</li>
-        <li><strong>📚 Kataloglar & Koleksiyonlar:</strong> Nuvio Ana Sayfası ve Keşfet sekmesinde tüm kütüphaneleriniz (<em>Filmler, Diziler, Koleksiyonlar</em>) otomatik satırlar halinde listelenir.</li>
-        <li><strong>🔍 Filtreleme:</strong> Bir kütüphaneye girdiğinizde Emby'deki tüm <strong>Türler (Genre)</strong> ve <strong>Yıllar (Year)</strong> üst menüden filtrelenebilir.</li>
-        <li><strong>🚀 Direct Play:</strong> İçerikleri transcode olmadan orijinal kalitesinde ve altyazılarıyla anında oynatın!</li>
+        <li><strong>📚 Otomatik Eklenen Kataloglar:</strong> Nuvio Ana Sayfasında ve Keşfet sekmesinde tüm Emby bölümleriniz listelenir:
+          <ul style="margin-top: 0.35rem; padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-muted);">
+            <li><strong>İzlemeye Devam Et:</strong> Yarım bıraktığınız filmler ve bölümler en üst satırda.</li>
+            <li><strong>Son Eklenenler:</strong> Emby sunucunuza yeni eklenen filmler ve diziler.</li>
+            <li><strong>Tümü (A - Z):</strong> 19 farklı Tür (Aksiyon, Komedi, Korku...) ve Yıl filtreleriyle taranabilir arşiv.</li>
+            <li><strong>Koleksiyonlar (BoxSet):</strong> Film serileri (Adalet, Baba, Harry Potter...) tek başlık altında.</li>
+          </ul>
+        </li>
+        <li><strong>🚀 Direct Play:</strong> İstediğiniz içeriğe tıklayın; Emby sunucunuzdan 0ms gecikmeyle, orijinal kalitesinde ve altyazılarıyla anında oynatın!</li>
       </ol>
     </div>
 
@@ -1320,32 +1329,38 @@ function parseExtraArgs(extraStr, searchParams) {
 }
 
 function formatEmbyItemToMeta(item, authInfo, defaultType) {
-  const isBoxset = item.Type === 'BoxSet';
-  const isSeries = item.Type === 'Series' || defaultType === 'series';
-  const isPlaylist = item.Type === 'Playlist';
+  const isBoxset = item.Type === "BoxSet";
+  const isEpisode = item.Type === "Episode";
+  const isSeries = item.Type === "Series" || (defaultType === "series" && !isEpisode);
+  const isPlaylist = item.Type === "Playlist";
 
   let id = \`emby:item:\${item.Id}\`;
   if (isBoxset) {
     id = \`emby:boxset:\${item.Id}\`;
   } else if (isPlaylist) {
     id = \`emby:playlist:\${item.Id}\`;
-  } else if (item.ProviderIds && item.ProviderIds.Imdb) {
-    const imdb = String(item.ProviderIds.Imdb).trim();
-    id = imdb.startsWith('tt') ? imdb : \`tt\${imdb}\`;
-  } else if (item.ProviderIds && item.ProviderIds.Tmdb) {
-    id = \`tmdb:\${item.ProviderIds.Tmdb}\`;
   }
 
-  const poster = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${item.Id}/Images/Primary?api_key=\${encodeURIComponent(authInfo.apiKey)}&maxWidth=400\`;
+  let name = item.Name;
+  let posterId = item.Id;
+
+  if (isEpisode) {
+    const sNum = item.ParentIndexNumber !== undefined ? item.ParentIndexNumber : 1;
+    const eNum = item.IndexNumber !== undefined ? item.IndexNumber : 1;
+    name = (item.SeriesName ? \`\${item.SeriesName} - \` : "") + \`S\${sNum}E\${eNum}: \${item.Name}\`;
+    if (item.SeriesId) posterId = item.SeriesId;
+  }
+
+  const poster = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${posterId}/Images/Primary?api_key=\${encodeURIComponent(authInfo.apiKey)}&maxWidth=400\`;
   const background = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${item.Id}/Images/Backdrop?api_key=\${encodeURIComponent(authInfo.apiKey)}&maxWidth=1280\`;
 
   return {
     id,
-    type: (isBoxset || isSeries) ? 'series' : 'movie',
-    name: item.Name,
+    type: (isBoxset || isSeries) ? "series" : "movie",
+    name,
     poster,
     background,
-    posterShape: 'poster',
+    posterShape: "poster",
     releaseInfo: item.ProductionYear ? String(item.ProductionYear) : undefined,
     description: item.Overview || undefined,
     genres: item.Genres || []
@@ -1360,8 +1375,20 @@ function getDefaultCatalogs() {
   return [
     {
       type: "movie",
+      id: "emby_movies_resume",
+      name: "Filmler - İzlemeye Devam Et",
+      extra: [{ name: "skip", isRequired: false }]
+    },
+    {
+      type: "movie",
+      id: "emby_movies_latest",
+      name: "Filmler - Son Eklenenler",
+      extra: [{ name: "skip", isRequired: false }]
+    },
+    {
+      type: "movie",
       id: "emby_all_movies",
-      name: "Emby / Jellyfin Filmler",
+      name: "Filmler - Tümü (A-Z)",
       extra: [
         { name: "genre", options: ["Aksiyon", "Gerilim", "Suç", "Macera", "Korku", "Gizem", "Dram", "Romantik", "Fantastik", "Komedi", "Bilim-Kurgu", "Animasyon", "Aile", "Belgesel"], isRequired: false },
         { name: "year", options: standardYears, isRequired: false },
@@ -1371,11 +1398,32 @@ function getDefaultCatalogs() {
     },
     {
       type: "series",
+      id: "emby_series_resume",
+      name: "Diziler - İzlemeye Devam Et",
+      extra: [{ name: "skip", isRequired: false }]
+    },
+    {
+      type: "series",
+      id: "emby_series_latest",
+      name: "Diziler - Son Eklenenler",
+      extra: [{ name: "skip", isRequired: false }]
+    },
+    {
+      type: "series",
       id: "emby_all_series",
-      name: "Emby / Jellyfin Diziler",
+      name: "Diziler - Tümü (A-Z)",
       extra: [
         { name: "genre", options: ["Aksiyon", "Gerilim", "Suç", "Macera", "Korku", "Gizem", "Dram", "Romantik", "Komedi", "Bilim-Kurgu", "Animasyon"], isRequired: false },
         { name: "year", options: standardYears, isRequired: false },
+        { name: "search", isRequired: false },
+        { name: "skip", isRequired: false }
+      ]
+    },
+    {
+      type: "series",
+      id: "emby_boxsets",
+      name: "Koleksiyonlar (Film Serileri)",
+      extra: [
         { name: "search", isRequired: false },
         { name: "skip", isRequired: false }
       ]
@@ -1395,7 +1443,7 @@ async function getEmbyCatalogs(authInfo) {
 
   try {
     const viewsUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Views?api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
-    const vRes = await fetch(viewsUrl, { headers: { 'Accept': 'application/json' } });
+    const vRes = await fetch(viewsUrl, { headers: { "Accept": "application/json" } });
     if (!vRes.ok) return getDefaultCatalogs();
     const vData = await vRes.json();
     const views = vData.Items || [];
@@ -1407,42 +1455,142 @@ async function getEmbyCatalogs(authInfo) {
       "2012", "2011", "2010", "2000s", "1990s", "1980s", "1970s"
     ];
 
-    const catalogs = [];
-    for (const v of views) {
-      const colType = (v.CollectionType || '').toLowerCase();
-      const isTv = colType === 'tvshows';
-      const isBoxset = colType === 'boxsets';
-      const type = isTv ? 'series' : 'movie';
-
-      let genres = [];
+    async function fetchGenres(parentId) {
       try {
-        const gUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Genres?ParentId=\${v.Id}&UserId=\${authInfo.userId}&api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
-        const gRes = await fetch(gUrl, { headers: { 'Accept': 'application/json' } });
+        const gUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Genres?ParentId=\${parentId}&UserId=\${authInfo.userId}&api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
+        const gRes = await fetch(gUrl, { headers: { "Accept": "application/json" } });
         if (gRes.ok) {
           const gData = await gRes.json();
-          genres = (gData.Items || []).map(g => g.Name).filter(Boolean);
+          return (gData.Items || []).map(g => g.Name).filter(Boolean);
         }
       } catch (e) {}
+      return [];
+    }
 
-      const extra = [
-        { name: "search", isRequired: false },
-        { name: "skip", isRequired: false }
-      ];
+    const catalogs = [];
 
-      if (genres.length > 0) {
-        extra.unshift({ name: "genre", options: genres, isRequired: false });
+    for (const v of views) {
+      const colType = (v.CollectionType || "").toLowerCase();
+      const isTv = colType === "tvshows";
+      const isMovies = colType === "movies";
+      const isBoxsets = colType === "boxsets";
+      const isPlaylists = colType === "playlists";
+
+      if (isMovies) {
+        const genres = await fetchGenres(v.Id);
+        const movieExtra = [
+          { name: "search", isRequired: false },
+          { name: "skip", isRequired: false }
+        ];
+        if (genres.length > 0) {
+          movieExtra.unshift({ name: "genre", options: genres, isRequired: false });
+        }
+        movieExtra.splice(genres.length > 0 ? 1 : 0, 0, { name: "year", options: standardYears, isRequired: false });
+
+        // 1. İzlemeye Devam Et (Continue Watching)
+        catalogs.push({
+          type: "movie",
+          id: \`emby_lib_\${v.Id}_resume\`,
+          name: \`\${v.Name} - İzlemeye Devam Et\`,
+          extra: [{ name: "skip", isRequired: false }]
+        });
+
+        // 2. Son Eklenenler (Latest)
+        catalogs.push({
+          type: "movie",
+          id: \`emby_lib_\${v.Id}_latest\`,
+          name: \`\${v.Name} - Son Eklenenler\`,
+          extra: [{ name: "skip", isRequired: false }]
+        });
+
+        // 3. Tümü (A - Z) with Filters
+        catalogs.push({
+          type: "movie",
+          id: \`emby_lib_\${v.Id}_all\`,
+          name: \`\${v.Name} - Tümü (A-Z)\`,
+          extra: movieExtra
+        });
+
+        // 4. En Çok Oy Alanlar
+        catalogs.push({
+          type: "movie",
+          id: \`emby_lib_\${v.Id}_top\`,
+          name: \`\${v.Name} - En Çok Oy Alanlar\`,
+          extra: [{ name: "skip", isRequired: false }]
+        });
+      } else if (isTv) {
+        const genres = await fetchGenres(v.Id);
+        const tvExtra = [
+          { name: "search", isRequired: false },
+          { name: "skip", isRequired: false }
+        ];
+        if (genres.length > 0) {
+          tvExtra.unshift({ name: "genre", options: genres, isRequired: false });
+        }
+        tvExtra.splice(genres.length > 0 ? 1 : 0, 0, { name: "year", options: standardYears, isRequired: false });
+
+        // 1. İzlemeye Devam Et
+        catalogs.push({
+          type: "series",
+          id: \`emby_lib_\${v.Id}_resume\`,
+          name: \`\${v.Name} - İzlemeye Devam Et\`,
+          extra: [{ name: "skip", isRequired: false }]
+        });
+
+        // 2. Son Eklenenler
+        catalogs.push({
+          type: "series",
+          id: \`emby_lib_\${v.Id}_latest\`,
+          name: \`\${v.Name} - Son Eklenenler\`,
+          extra: [{ name: "skip", isRequired: false }]
+        });
+
+        // 3. Tümü (A - Z) with Filters
+        catalogs.push({
+          type: "series",
+          id: \`emby_lib_\${v.Id}_all\`,
+          name: \`\${v.Name} - Tümü (A-Z)\`,
+          extra: tvExtra
+        });
+
+        // 4. En Çok Oy Alanlar
+        catalogs.push({
+          type: "series",
+          id: \`emby_lib_\${v.Id}_top\`,
+          name: \`\${v.Name} - En Çok Oy Alanlar\`,
+          extra: [{ name: "skip", isRequired: false }]
+        });
+      } else if (isBoxsets) {
+        catalogs.push({
+          type: "series",
+          id: \`emby_lib_\${v.Id}_boxsets\`,
+          name: \`\${v.Name} (Film Serileri)\`,
+          extra: [
+            { name: "search", isRequired: false },
+            { name: "skip", isRequired: false }
+          ]
+        });
+      } else if (isPlaylists) {
+        catalogs.push({
+          type: "series",
+          id: \`emby_lib_\${v.Id}_playlists\`,
+          name: v.Name,
+          extra: [
+            { name: "search", isRequired: false },
+            { name: "skip", isRequired: false }
+          ]
+        });
+      } else {
+        catalogs.push({
+          type: isTv ? "series" : "movie",
+          id: \`emby_lib_\${v.Id}_all\`,
+          name: v.Name,
+          extra: [
+            { name: "search", isRequired: false },
+            { name: "skip", isRequired: false }
+          ]
+        });
       }
-
-      if (!isBoxset && (colType === 'movies' || colType === 'tvshows' || colType === '')) {
-        extra.splice(genres.length > 0 ? 1 : 0, 0, { name: "year", options: standardYears, isRequired: false });
-      }
-
-      catalogs.push({
-        type,
-        id: \`emby_lib_\${v.Id}\`,
-        name: v.Name,
-        extra
-      });
     }
 
     if (catalogs.length > 0) {
@@ -1464,26 +1612,70 @@ async function resolveCatalog(config, catalogType, catalogId, extraStr, searchPa
   const search = extraArgs.search;
   const skip = Number(extraArgs.skip) || 0;
 
-  const viewMatch = catalogId.match(/^emby_lib_([a-zA-Z0-9_\-]+)$/);
+  const viewMatch = catalogId.match(/^emby_lib_([a-zA-Z0-9\-]+)(?:_([a-z]+))?$/);
   const viewId = viewMatch ? viewMatch[1] : null;
+  const subType = (viewMatch && viewMatch[2]) || (catalogId.includes("_resume") ? "resume" : (catalogId.includes("_latest") ? "latest" : (catalogId.includes("_boxsets") ? "boxsets" : "all")));
 
-  const isTv = catalogType === 'series';
+  const isTv = catalogType === "series";
   let queryParams = [
-    'Recursive=true',
+    "Recursive=true",
     \`api_key=\${encodeURIComponent(authInfo.apiKey)}\`,
-    'Fields=Genres,ProductionYear,ProviderIds,Overview,PrimaryImageAspectRatio,PremiereDate',
+    "Fields=Genres,ProductionYear,ProviderIds,Overview,PrimaryImageAspectRatio,PremiereDate,SeriesName,SeriesId,IndexNumber,ParentIndexNumber",
     \`StartIndex=\${skip}\`,
-    'Limit=50'
+    "Limit=50"
   ];
 
-  if (viewId) {
+  if (viewId && viewId !== "movies" && viewId !== "series" && viewId !== "all") {
     queryParams.push(\`ParentId=\${encodeURIComponent(viewId)}\`);
   }
 
-  if (isTv) {
-    queryParams.push('IncludeItemTypes=Series');
+  if (subType === "resume") {
+    queryParams.push("Filters=IsResumable");
+    queryParams.push("SortBy=DatePlayed");
+    queryParams.push("SortOrder=Descending");
+    if (isTv) {
+      queryParams.push("IncludeItemTypes=Episode,Series");
+    } else {
+      queryParams.push("IncludeItemTypes=Movie");
+    }
+  } else if (subType === "latest") {
+    queryParams.push("SortBy=DateCreated");
+    queryParams.push("SortOrder=Descending");
+    if (isTv) {
+      queryParams.push("IncludeItemTypes=Series");
+    } else {
+      queryParams.push("IncludeItemTypes=Movie");
+    }
+  } else if (subType === "top") {
+    queryParams.push("SortBy=CommunityRating,SortName");
+    queryParams.push("SortOrder=Descending");
+    if (isTv) {
+      queryParams.push("IncludeItemTypes=Series");
+    } else {
+      queryParams.push("IncludeItemTypes=Movie");
+    }
+  } else if (subType === "boxsets") {
+    queryParams.push("SortBy=SortName");
+    queryParams.push("SortOrder=Ascending");
+    queryParams.push("IncludeItemTypes=BoxSet");
+  } else if (subType === "playlists") {
+    queryParams.push("SortBy=SortName");
+    queryParams.push("SortOrder=Ascending");
+    queryParams.push("IncludeItemTypes=Playlist");
   } else {
-    queryParams.push('IncludeItemTypes=Movie,BoxSet,Playlist');
+    if (isTv) {
+      queryParams.push("IncludeItemTypes=Series");
+    } else {
+      queryParams.push("IncludeItemTypes=Movie,BoxSet");
+    }
+    if (search) {
+      queryParams.push(\`SearchTerm=\${encodeURIComponent(search)}\`);
+      queryParams.push("SortBy=SortName");
+      queryParams.push("SortOrder=Ascending");
+    } else {
+      queryParams.push("SortBy=SortName");
+      queryParams.push("SortOrder=Ascending");
+    }
   }
 
   if (genre) {
@@ -1496,28 +1688,19 @@ async function resolveCatalog(config, catalogType, catalogId, extraStr, searchPa
       const startYear = parseInt(decadeMatch[1], 10);
       const yearsArr = [];
       for (let y = startYear; y < startYear + 10; y++) yearsArr.push(y);
-      queryParams.push(\`Years=\${yearsArr.join(',')}\`);
+      queryParams.push(\`Years=\${yearsArr.join(",")}\`);
     } else {
       queryParams.push(\`Years=\${encodeURIComponent(year)}\`);
     }
   }
 
-  if (search) {
-    queryParams.push(\`SearchTerm=\${encodeURIComponent(search)}\`);
-    queryParams.push('SortBy=SortName');
-    queryParams.push('SortOrder=Ascending');
-  } else {
-    queryParams.push('SortBy=DateCreated,SortName');
-    queryParams.push('SortOrder=Descending');
-  }
-
-  const url = \`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Items?\${queryParams.join('&')}\`;
+  const url = \`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Items?\${queryParams.join("&")}\`;
   try {
     const res = await fetch(url, {
       headers: {
-        'Accept': 'application/json',
-        'X-Emby-Token': authInfo.apiKey,
-        'X-MediaBrowser-Token': authInfo.apiKey
+        "Accept": "application/json",
+        "X-Emby-Token": authInfo.apiKey,
+        "X-MediaBrowser-Token": authInfo.apiKey
       }
     });
 
@@ -1535,14 +1718,14 @@ async function resolveMeta(config, metaType, rawId) {
   if (!authInfo || !authInfo.apiKey || !authInfo.userId) return { meta: null };
 
   const apiHeaders = {
-    'Accept': 'application/json',
-    'X-Emby-Token': authInfo.apiKey,
-    'X-MediaBrowser-Token': authInfo.apiKey
+    "Accept": "application/json",
+    "X-Emby-Token": authInfo.apiKey,
+    "X-MediaBrowser-Token": authInfo.apiKey
   };
 
   // 1. BoxSet: emby:boxset:12345
-  if (rawId.startsWith('emby:boxset:')) {
-    const boxsetId = rawId.replace('emby:boxset:', '');
+  if (rawId.startsWith("emby:boxset:")) {
+    const boxsetId = rawId.replace("emby:boxset:", "");
     try {
       const bRes = await fetch(\`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Items/\${boxsetId}?api_key=\${encodeURIComponent(authInfo.apiKey)}\`, { headers: apiHeaders });
       if (!bRes.ok) return { meta: null };
@@ -1557,7 +1740,7 @@ async function resolveMeta(config, metaType, rawId) {
 
       const videos = children.map((c, idx) => ({
         id: \`emby:item:\${c.Id}\`,
-        title: \`\${c.Name}\${c.ProductionYear ? \` (\${c.ProductionYear})\` : ''}\`,
+        title: \`\${c.Name}\${c.ProductionYear ? \` (\${c.ProductionYear})\` : ""}\`,
         season: 1,
         episode: idx + 1,
         released: c.PremiereDate || (c.ProductionYear ? \`\${c.ProductionYear}-01-01\` : undefined),
@@ -1567,12 +1750,12 @@ async function resolveMeta(config, metaType, rawId) {
       return {
         meta: {
           id: rawId,
-          type: 'series',
+          type: "series",
           name: boxset.Name,
           poster,
           background,
-          posterShape: 'poster',
-          description: boxset.Overview || 'Emby / Jellyfin Koleksiyonu',
+          posterShape: "poster",
+          description: boxset.Overview || "Emby / Jellyfin Koleksiyonu",
           genres: boxset.Genres || [],
           videos
         }
@@ -1583,8 +1766,8 @@ async function resolveMeta(config, metaType, rawId) {
   }
 
   // 2. Direct Emby Item: emby:item:12345 or emby:12345
-  if (rawId.startsWith('emby:item:') || rawId.startsWith('emby:')) {
-    const itemId = rawId.replace(/^emby:(item:)?/, '');
+  if (rawId.startsWith("emby:item:") || rawId.startsWith("emby:")) {
+    const itemId = rawId.replace(/^emby:(item:)?/, "");
     try {
       const iRes = await fetch(\`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Items/\${itemId}?api_key=\${encodeURIComponent(authInfo.apiKey)}\`, { headers: apiHeaders });
       if (!iRes.ok) return { meta: null };
@@ -1593,7 +1776,7 @@ async function resolveMeta(config, metaType, rawId) {
       const poster = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${item.Id}/Images/Primary?api_key=\${encodeURIComponent(authInfo.apiKey)}&maxWidth=400\`;
       const background = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${item.Id}/Images/Backdrop?api_key=\${encodeURIComponent(authInfo.apiKey)}&maxWidth=1280\`;
 
-      const isSeries = item.Type === 'Series';
+      const isSeries = item.Type === "Series";
       let videos = undefined;
 
       if (isSeries) {
@@ -1614,11 +1797,11 @@ async function resolveMeta(config, metaType, rawId) {
       return {
         meta: {
           id: rawId,
-          type: isSeries ? 'series' : 'movie',
+          type: isSeries ? "series" : "movie",
           name: item.Name,
           poster,
           background,
-          posterShape: 'poster',
+          posterShape: "poster",
           releaseInfo: item.ProductionYear ? String(item.ProductionYear) : undefined,
           description: item.Overview || undefined,
           genres: item.Genres || [],
@@ -1628,6 +1811,30 @@ async function resolveMeta(config, metaType, rawId) {
     } catch (e) {
       return { meta: null };
     }
+  }
+
+  // 3. Fallback for IMDb (tt...) or TMDB (tmdb:...)
+  if (rawId.startsWith("tt") || rawId.startsWith("tmdb:")) {
+    try {
+      const idInfo = parseInputId(rawId, metaType === "series" ? "tv" : "movie");
+      const isSeries = idInfo.mediaType === "tv";
+      const itemType = isSeries ? "Series" : "Movie";
+      const providerFormats = idInfo.isImdb
+        ? [\`imdb.\${idInfo.cleanId}\`, \`Imdb.\${idInfo.cleanId}\`]
+        : [\`tmdb.\${idInfo.cleanId}\`, \`Tmdb.\${idInfo.cleanId}\`];
+
+      for (const pId of providerFormats) {
+        const sUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Items?AnyProviderIdEquals=\${encodeURIComponent(pId)}&IncludeItemTypes=\${itemType}&Recursive=true&Fields=ProviderIds,Name,Id,MediaSources,Overview,Genres,ProductionYear&api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
+        const sRes = await fetch(sUrl, { headers: apiHeaders });
+        if (sRes.ok) {
+          const sData = await sRes.json();
+          if (sData.Items && sData.Items.length > 0) {
+            const foundItem = sData.Items[0];
+            return await resolveMeta(config, metaType, foundItem.Type === "BoxSet" ? \`emby:boxset:\${foundItem.Id}\` : \`emby:item:\${foundItem.Id}\`);
+          }
+        }
+      }
+    } catch (e) {}
   }
 
   return { meta: null };
