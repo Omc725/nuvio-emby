@@ -10,6 +10,10 @@ Bu eklenti, Nuvio'nun cihaz üzerindeki yerleşik **QuickJS (sandboxed ES2020)**
 
 - **Çift Sunucu Desteği & Otomatik Algılama (Auto-Detection):** Emby ve Jellyfin sunucularını otomatik tanır. Sunucu türünüze göre API yollarını (Jellyfin root `/Videos/...` ve Emby `/emby/...`) ve kimlik doğrulama başlıklarını dinamik olarak ayarlar; kullanıcı müdahalesi veya ayrı eklenti gerektirmez.
 - **Dinamik Kütüphane ve Katalog Entegrasyonu (Benim Medyam):** Emby / Jellyfin sunucunuzdaki tüm kütüphaneler ("Filmler", "Diziler", "Koleksiyonlar", "Oynatma Listeleri") Nuvio içerisinde taranabilir ve keşfedilebilir kataloglar olarak listelenir.
+- **Nuvio Koleksiyon (Collection / Folder) Desteği:** Emby ana ekranındaki gibi yatay kartlarla (Landscape tiles) kütüphanelerinizi Nuvio ana ekranına taşır:
+  - **collections.json Dışa Aktarma:** Cloudflare Worker arayüzünden tek tıkla `collections.json` indirip `nuvio.tv` hesabınıza içe aktararak ana ekranda **"Benim Medyam"** klasör şeridini elde edebilirsiniz.
+  - **Klasör İçi Filtreleme & Sıralama:** Bir klasöre (örn: "Diziler" veya "Filmler") tıklandığında içinde "İzlemeye Devam Et", "Son Eklenenler", "Tümü (A-Z)" ve "En Çok Oy Alanlar" katalogları yer alır; tür ve yıl filtreleriyle anında filtreleme yapılabilir.
+  - **Addon İçi '📁 Benim Medyam' Kataloğu:** Ayrıca Stremio/Nuvio katalog listesinde en başta yer alan "📁 Benim Medyam" sekmesiyle doğrudan kütüphane kartlarına göz atabilirsiniz.
 - **Koleksiyon İçi Filtreleme (Tür & Yıl):** Her katalog içinde Emby'deki gibi derinlemesine filtreleme desteği:
   - **Tür (Genre):** Aksiyon, Komedi, Dram, Bilim Kurgu, Animasyon vb.
   - **Yıl (Year):** 2025, 2024, 2023, 2022, 2020'ler, 2010'lar, 2000'ler, 1990'lar, 1980'ler.

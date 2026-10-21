@@ -58,4 +58,9 @@ Komut tamamlandığında terminal size canlı URL'nizi verecektir (örn: `https:
    - Kopyaladığınız adresi yapıştırın.
 7. Bitti! Artık Emby veya Jellyfin kütüphanenizdeki tüm dizi ve filmler Nuvio'da Direct Play ve Türkçe/İngilizce altyazı desteğiyle hazır!
 8. **Katalog & Koleksiyon Kullanımı:** Nuvio'nun **Keşfet (Discover / Kataloglar)** bölümüne girdiğinizde, Emby'deki "Filmler", "Diziler", "Koleksiyonlar" bölümleriniz ayrı ayrı listelenecektir. Bir kataloğa girdiğinizde üst kısımdaki filtre butonlarından **Tür** (Aksiyon, Komedi, Korku...) ve **Yıl** (2025, 2024, 2020'ler...) seçerek kütüphanenizi süzebilir, "Koleksiyonlar" altından film serilerini tek parça halinde açıp izleyebilirsiniz.
+9. **Nuvio Ana Ekranında "Benim Medyam" Klasörleri (collections.json):**
+   - Web arayüzünde manifest URL'si üretildiğinde yeşil kutucukta **"collections.json İndir"** ve **"JSON Kopyala"** butonları belirir.
+   - [nuvio.tv](https://nuvio.tv) adresine gidip hesabınıza giriş yapın.
+   - **Account > Collections > Import** adımlarını izleyip bu `collections.json` dosyasını içe aktarın.
+   - Nuvio ana ekranında Emby'deki gibi **"Benim Medyam"** satırı, yatay kartlarla (Diziler, Filmler, Koleksiyonlar, Oynatma Listeleri) belirecek ve içine girildiğinde "İzlemeye Devam Et", "Son Eklenenler", "Tümü (A-Z)" satırları filtreleme ve sıralama özellikleriyle birlikte çalışacaktır.
 

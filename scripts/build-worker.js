@@ -518,6 +518,30 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
         </button>
       </div>
 
+            <!-- Nuvio Koleksiyon Yapısı (Benim Medyam) -->
+      <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 1rem; margin-top: 1rem; margin-bottom: 1rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
+          <h4 style="font-size: 0.95rem; font-weight: 700; color: #34d399; margin: 0;">📁 Nuvio Koleksiyon Yapısı ("Benim Medyam")</h4>
+          <span style="font-size: 0.7rem; background: #065f46; color: #a7f3d0; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600;">collections.json</span>
+        </div>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Nuvio ana ekranında Emby'deki gibi <strong>"Benim Medyam"</strong> klasör görünümünü (Diziler, Filmler, Koleksiyonlar yan yana yatay kutucuklar halinde) elde etmek için bu dosyayı Nuvio hesabınıza aktarabilirsiniz.
+        </p>
+
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <a id="btnDownloadCollection" href="#" download="collections.json" class="btn" style="background: #059669; color: #fff; text-decoration: none; padding: 0.5rem 0.85rem; font-size: 0.8rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600;">
+            <span>📥</span> <span>collections.json İndir</span>
+          </a>
+          <button type="button" id="btnCopyCollectionJson" class="btn" style="background: rgba(255,255,255,0.08); color: #e2e8f0; border: 1px solid rgba(255,255,255,0.15); padding: 0.5rem 0.85rem; font-size: 0.8rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer;">
+            <span id="copyCollectionIcon">📋</span> <span id="copyCollectionText">JSON Kopyala</span>
+          </button>
+        </div>
+
+        <div style="margin-top: 0.75rem; font-size: 0.75rem; color: #94a3b8; line-height: 1.4;">
+          <strong>Nasıl Yüklenir:</strong> <a href="https://nuvio.tv" target="_blank" style="color: #60a5fa; text-decoration: underline;">nuvio.tv</a> adresinde hesabınıza giriş yapın → <strong>Account &gt; Collections &gt; Import</strong> kısmından bu <code>collections.json</code> dosyasını seçip onaylayın.
+        </div>
+      </div>
+
       <div class="qr-section">
         <div id="qrcode"></div>
         <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.65rem;">Android TV veya telefon kamerasından kolayca taratabilirsiniz</span>
@@ -684,6 +708,30 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       const manifestUrl = origin + '/' + token + '/manifest.json';
 
       manifestUrlText.textContent = manifestUrl;
+      const collectionUrl = manifestUrl.replace("/manifest.json", "/collections.json");
+      const btnDownloadCol = document.getElementById("btnDownloadCollection");
+      if (btnDownloadCol) btnDownloadCol.href = collectionUrl;
+
+      const btnCopyCol = document.getElementById("btnCopyCollectionJson");
+      if (btnCopyCol) {
+        btnCopyCol.onclick = async () => {
+          try {
+            const cRes = await fetch(collectionUrl);
+            const cJson = await cRes.text();
+            await navigator.clipboard.writeText(cJson);
+            const copyIcon = document.getElementById("copyCollectionIcon");
+            const copyText = document.getElementById("copyCollectionText");
+            copyIcon.textContent = "✅";
+            copyText.textContent = "Kopyalandı!";
+            setTimeout(() => {
+              copyIcon.textContent = "📋";
+              copyText.textContent = "JSON Kopyala";
+            }, 2500);
+          } catch (e) {
+            alert("Koleksiyon JSON kopyalanamadı.");
+          }
+        };
+      }
       resultCard.classList.add('show');
       showStatus('success', '✅ Kişisel Manifest URL\\'si başarıyla üretildi! Aşağıdan kopyalayabilirsiniz.');
 
@@ -1375,6 +1423,12 @@ function getDefaultCatalogs() {
   return [
     {
       type: "movie",
+      id: "emby_my_media",
+      name: "📁 Benim Medyam",
+      extra: [{ name: "skip", isRequired: false }]
+    },
+    {
+      type: "movie",
       id: "emby_movies_resume",
       name: "Filmler - İzlemeye Devam Et",
       extra: [{ name: "skip", isRequired: false }]
@@ -1593,6 +1647,14 @@ async function getEmbyCatalogs(authInfo) {
       }
     }
 
+        // Add top-level "Benim Medyam" landscape collection catalog
+    catalogs.unshift({
+      type: "movie",
+      id: "emby_my_media",
+      name: "📁 Benim Medyam",
+      extra: [{ name: "skip", isRequired: false }]
+    });
+
     if (catalogs.length > 0) {
       catalogsCache.set(cacheKey, { catalogs, timestamp: now });
       return catalogs;
@@ -1615,6 +1677,32 @@ async function resolveCatalog(config, catalogType, catalogId, extraStr, searchPa
   const viewMatch = catalogId.match(/^emby_lib_([a-zA-Z0-9\-]+)(?:_([a-z]+))?$/);
   const viewId = viewMatch ? viewMatch[1] : null;
   const subType = (viewMatch && viewMatch[2]) || (catalogId.includes("_resume") ? "resume" : (catalogId.includes("_latest") ? "latest" : (catalogId.includes("_boxsets") ? "boxsets" : "all")));
+
+  // 0. Handle "Benim Medyam" library tiles
+  if (catalogId === "emby_my_media") {
+    try {
+      const vUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Views?api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
+      const vRes = await fetch(vUrl, { headers: { "Accept": "application/json" } });
+      if (vRes.ok) {
+        const vData = await vRes.json();
+        const metas = (vData.Items || []).map(v => {
+          const cUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${v.Id}/Images/Primary?maxWidth=600&api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
+          return {
+            id: \`emby:library:\${v.Id}\`,
+            type: (v.CollectionType || "").toLowerCase() === "tvshows" ? "series" : "movie",
+            name: v.Name,
+            poster: cUrl,
+            background: cUrl,
+            posterShape: "landscape",
+            description: \`\${v.Name} Kütüphanesi\`,
+            genres: ["Koleksiyon", "Benim Medyam"]
+          };
+        });
+        return { metas };
+      }
+    } catch (e) {}
+    return { metas: [] };
+  }
 
   const isTv = catalogType === "series";
   let queryParams = [
@@ -1722,6 +1810,48 @@ async function resolveMeta(config, metaType, rawId) {
     "X-Emby-Token": authInfo.apiKey,
     "X-MediaBrowser-Token": authInfo.apiKey
   };
+
+    // 0. Emby Library Collection: emby:library:12345
+  if (rawId.startsWith("emby:library:")) {
+    const libId = rawId.replace("emby:library:", "");
+    try {
+      const vUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Items/\${libId}?api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
+      const vRes = await fetch(vUrl, { headers: apiHeaders });
+      const libItem = vRes.ok ? await vRes.json() : { Name: "Emby Kütüphanesi", Id: libId };
+
+      const cUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Items?ParentId=\${libId}&SortBy=SortName&SortOrder=Ascending&Limit=50&Fields=Genres,ProductionYear,Overview,ProviderIds,PremiereDate&api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
+      const cRes = await fetch(cUrl, { headers: apiHeaders });
+      const cData = cRes.ok ? await cRes.json() : { Items: [] };
+      const children = cData.Items || [];
+
+      const poster = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${libId}/Images/Primary?api_key=\${encodeURIComponent(authInfo.apiKey)}&maxWidth=600\`;
+
+      const videos = children.map((c, idx) => ({
+        id: \`emby:item:\${c.Id}\`,
+        title: \`\${c.Name}\${c.ProductionYear ? \` (\${c.ProductionYear})\` : ""}\`,
+        season: 1,
+        episode: idx + 1,
+        released: c.PremiereDate,
+        overview: c.Overview
+      }));
+
+      return {
+        meta: {
+          id: rawId,
+          type: "series",
+          name: libItem.Name,
+          poster,
+          background: poster,
+          posterShape: "landscape",
+          description: libItem.Overview || \`\${libItem.Name} koleksiyonu\`,
+          genres: ["Benim Medyam"],
+          videos
+        }
+      };
+    } catch (e) {
+      return { meta: null };
+    }
+  }
 
   // 1. BoxSet: emby:boxset:12345
   if (rawId.startsWith("emby:boxset:")) {
@@ -1838,6 +1968,87 @@ async function resolveMeta(config, metaType, rawId) {
   }
 
   return { meta: null };
+}
+
+async function generateNuvioCollections(authInfo, configToken, userConfig) {
+  if (!authInfo || !authInfo.apiKey || !authInfo.userId) {
+    return [
+      {
+        id: "collection-benim-medyam",
+        title: "Benim Medyam",
+        focusGlowEnabled: true,
+        folders: []
+      }
+    ];
+  }
+
+  try {
+    const viewsUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Views?api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
+    const vRes = await fetch(viewsUrl, { headers: { "Accept": "application/json" } });
+    if (!vRes.ok) return [];
+    const vData = await vRes.json();
+    const views = vData.Items || [];
+
+    const folders = [];
+    for (const v of views) {
+      const colType = (v.CollectionType || "").toLowerCase();
+      const isTv = colType === "tvshows";
+      const isMovies = colType === "movies";
+      const isBoxsets = colType === "boxsets";
+      const isPlaylists = colType === "playlists";
+
+      const coverImageUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${v.Id}/Images/Primary?maxWidth=600&api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
+      const catalogSources = [];
+
+      if (isMovies) {
+        catalogSources.push(
+          { addonId: "org.omc725.nuvioemby", catalogId: \`emby_lib_\${v.Id}_resume\`, type: "movie" },
+          { addonId: "org.omc725.nuvioemby", catalogId: \`emby_lib_\${v.Id}_latest\`, type: "movie" },
+          { addonId: "org.omc725.nuvioemby", catalogId: \`emby_lib_\${v.Id}_all\`, type: "movie" },
+          { addonId: "org.omc725.nuvioemby", catalogId: \`emby_lib_\${v.Id}_top\`, type: "movie" }
+        );
+      } else if (isTv) {
+        catalogSources.push(
+          { addonId: "org.omc725.nuvioemby", catalogId: \`emby_lib_\${v.Id}_resume\`, type: "series" },
+          { addonId: "org.omc725.nuvioemby", catalogId: \`emby_lib_\${v.Id}_latest\`, type: "series" },
+          { addonId: "org.omc725.nuvioemby", catalogId: \`emby_lib_\${v.Id}_all\`, type: "series" },
+          { addonId: "org.omc725.nuvioemby", catalogId: \`emby_lib_\${v.Id}_top\`, type: "series" }
+        );
+      } else if (isBoxsets) {
+        catalogSources.push(
+          { addonId: "org.omc725.nuvioemby", catalogId: \`emby_lib_\${v.Id}_boxsets\`, type: "series" }
+        );
+      } else if (isPlaylists) {
+        catalogSources.push(
+          { addonId: "org.omc725.nuvioemby", catalogId: \`emby_lib_\${v.Id}_playlists\`, type: "series" }
+        );
+      }
+
+      folders.push({
+        id: \`folder-emby-\${v.Id}\`,
+        title: v.Name,
+        hideTitle: false,
+        tileShape: "LANDSCAPE",
+        coverEmoji: isMovies ? "🎬" : (isTv ? "📺" : (isBoxsets ? "📦" : "📑")),
+        coverImageUrl,
+        heroBackdropUrl: coverImageUrl,
+        focusGifEnabled: false,
+        catalogSources,
+        sources: []
+      });
+    }
+
+    return [
+      {
+        id: "collection-benim-medyam",
+        title: "Benim Medyam",
+        focusGlowEnabled: true,
+        folders
+      }
+    ];
+  } catch (err) {
+    return [];
+  }
 }
 
 export default {
@@ -2119,7 +2330,24 @@ export default {
       }
 
       // Personalized Manifest (Stremio + Nuvio Scraper)
-      if (remainingPath === 'manifest.json') {
+            // Nuvio Collections JSON export: /:config/collections.json
+      if (remainingPath === "collections.json" || remainingPath === "collections") {
+        let authInfo = null;
+        try {
+          authInfo = await getEmbyAuthAndInfo(userConfig);
+        } catch (e) {}
+        const collections = await generateNuvioCollections(authInfo, configToken, userConfig);
+        return new Response(JSON.stringify(collections, null, 2), {
+          status: 200,
+          headers: corsHeaders({
+            "Content-Type": "application/json; charset=utf-8",
+            'Content-Disposition': 'inline; filename="collections.json"',
+            "Cache-Control": "public, max-age=300"
+          })
+        });
+      }
+
+if (remainingPath === 'manifest.json') {
         const customManifest = JSON.parse(JSON.stringify(BASE_MANIFEST));
         let authInfo = null;
         try {
