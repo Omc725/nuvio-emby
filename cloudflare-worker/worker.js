@@ -358,6 +358,31 @@ async function resolveEmbyStreams(userConfig, type, rawId) {
 
   if (!apiKey) return [];
 
+  // BoxSet Stream Resolver: returns playable streams for all films in this collection
+  if (rawId.startsWith("emby:boxset:")) {
+    const boxsetId = rawId.replace("emby:boxset:", "");
+    try {
+      const cRes = await fetch(`${serverUrl}${effectivePrefix}/Users/${userId}/Items?ParentId=${encodeURIComponent(boxsetId)}&Fields=Name,ProductionYear,MediaSources&SortBy=SortName&SortOrder=Ascending&api_key=${encodeURIComponent(apiKey)}`, { headers: authHeaders });
+      if (cRes.ok) {
+        const cData = await cRes.json();
+        const children = cData.Items || [];
+        const allStreams = [];
+        for (let i = 0; i < children.length; i++) {
+          const child = children[i];
+          const childStreams = await resolveEmbyStreams(userConfig, "movie", `emby:item:${child.Id}`);
+          for (const s of childStreams) {
+            allStreams.push({
+              name: s.name || "Emby",
+              title: `🎬 ${i + 1}. Film: ${child.Name}${child.ProductionYear ? ` (${child.ProductionYear})` : ""}\n${s.title || ""}`,
+              url: s.url
+            });
+          }
+        }
+        if (allStreams.length > 0) return allStreams;
+      }
+    } catch (e) {}
+  }
+
   // Direct Emby ID support (from catalogs and collections)
   let directTargetId = null;
   if (/^emby:(item:)?([a-zA-Z0-9_-]+)/i.test(rawId)) {
@@ -678,7 +703,7 @@ function formatEmbyItemToMeta(item, authInfo, defaultType) {
 
   return {
     id,
-    type: (isBoxset || isSeries) ? "series" : "movie",
+    type: isSeries ? "series" : "movie",
     name,
     poster,
     background,
@@ -695,12 +720,6 @@ function getDefaultCatalogs() {
     "2019", "2018", "2017", "2016", "2015", "2010s", "2000s", "1990s"
   ];
   return [
-    {
-      type: "movie",
-      id: "emby_my_media",
-      name: "📁 Benim Medyam",
-      extra: [{ name: "skip", isRequired: false }]
-    },
     {
       type: "movie",
       id: "emby_movies_resume",
@@ -748,7 +767,7 @@ function getDefaultCatalogs() {
       ]
     },
     {
-      type: "series",
+      type: "movie",
       id: "emby_boxsets",
       name: "Koleksiyonlar (Film Serileri)",
       extra: [
@@ -890,7 +909,7 @@ async function getEmbyCatalogs(authInfo) {
         });
       } else if (isBoxsets) {
         catalogs.push({
-          type: "series",
+          type: "movie",
           id: `emby_lib_${v.Id}_boxsets`,
           name: `${v.Name} (Film Serileri)`,
           extra: [
@@ -900,7 +919,7 @@ async function getEmbyCatalogs(authInfo) {
         });
       } else if (isPlaylists) {
         catalogs.push({
-          type: "series",
+          type: "movie",
           id: `emby_lib_${v.Id}_playlists`,
           name: v.Name,
           extra: [
@@ -920,14 +939,6 @@ async function getEmbyCatalogs(authInfo) {
         });
       }
     }
-
-        // Add top-level "Benim Medyam" landscape collection catalog
-    catalogs.unshift({
-      type: "movie",
-      id: "emby_my_media",
-      name: "📁 Benim Medyam",
-      extra: [{ name: "skip", isRequired: false }]
-    });
 
     if (catalogs.length > 0) {
       catalogsCache.set(cacheKey, { catalogs, timestamp: now });
@@ -952,26 +963,21 @@ async function resolveCatalog(config, catalogType, catalogId, extraStr, searchPa
   const viewId = viewMatch ? viewMatch[1] : null;
   const subType = (viewMatch && viewMatch[2]) || (catalogId.includes("_resume") ? "resume" : (catalogId.includes("_latest") ? "latest" : (catalogId.includes("_boxsets") ? "boxsets" : "all")));
 
-  // 0. Handle "Benim Medyam" library tiles
-  if (catalogId === "emby_my_media") {
+  // 0. Handle individual BoxSet contents (movie franchise folders)
+  if (catalogId.startsWith("emby_boxset_")) {
+    const boxsetId = catalogId.replace("emby_boxset_", "");
     try {
-      const vUrl = `${authInfo.serverUrl}${authInfo.prefix}/Users/${authInfo.userId}/Views?api_key=${encodeURIComponent(authInfo.apiKey)}`;
-      const vRes = await fetch(vUrl, { headers: { "Accept": "application/json" } });
-      if (vRes.ok) {
-        const vData = await vRes.json();
-        const metas = (vData.Items || []).map(v => {
-          const cUrl = `${authInfo.serverUrl}${authInfo.prefix}/Items/${v.Id}/Images/Primary?maxWidth=600&api_key=${encodeURIComponent(authInfo.apiKey)}`;
-          return {
-            id: `emby:library:${v.Id}`,
-            type: (v.CollectionType || "").toLowerCase() === "tvshows" ? "series" : "movie",
-            name: v.Name,
-            poster: cUrl,
-            background: cUrl,
-            posterShape: "landscape",
-            description: `${v.Name} Kütüphanesi`,
-            genres: ["Koleksiyon", "Benim Medyam"]
-          };
-        });
+      const url = `${authInfo.serverUrl}${authInfo.prefix}/Users/${authInfo.userId}/Items?ParentId=${encodeURIComponent(boxsetId)}&Fields=Genres,ProductionYear,Overview,ProviderIds,PremiereDate&SortBy=SortName&SortOrder=Ascending&api_key=${encodeURIComponent(authInfo.apiKey)}`;
+      const res = await fetch(url, {
+        headers: {
+          "Accept": "application/json",
+          "X-Emby-Token": authInfo.apiKey,
+          "X-MediaBrowser-Token": authInfo.apiKey
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const metas = (data.Items || []).map(item => formatEmbyItemToMeta(item, authInfo, "movie"));
         return { metas };
       }
     } catch (e) {}
@@ -1085,49 +1091,7 @@ async function resolveMeta(config, metaType, rawId) {
     "X-MediaBrowser-Token": authInfo.apiKey
   };
 
-    // 0. Emby Library Collection: emby:library:12345
-  if (rawId.startsWith("emby:library:")) {
-    const libId = rawId.replace("emby:library:", "");
-    try {
-      const vUrl = `${authInfo.serverUrl}${authInfo.prefix}/Users/${authInfo.userId}/Items/${libId}?api_key=${encodeURIComponent(authInfo.apiKey)}`;
-      const vRes = await fetch(vUrl, { headers: apiHeaders });
-      const libItem = vRes.ok ? await vRes.json() : { Name: "Emby Kütüphanesi", Id: libId };
-
-      const cUrl = `${authInfo.serverUrl}${authInfo.prefix}/Users/${authInfo.userId}/Items?ParentId=${libId}&SortBy=SortName&SortOrder=Ascending&Limit=50&Fields=Genres,ProductionYear,Overview,ProviderIds,PremiereDate&api_key=${encodeURIComponent(authInfo.apiKey)}`;
-      const cRes = await fetch(cUrl, { headers: apiHeaders });
-      const cData = cRes.ok ? await cRes.json() : { Items: [] };
-      const children = cData.Items || [];
-
-      const poster = `${authInfo.serverUrl}${authInfo.prefix}/Items/${libId}/Images/Primary?api_key=${encodeURIComponent(authInfo.apiKey)}&maxWidth=600`;
-
-      const videos = children.map((c, idx) => ({
-        id: `emby:item:${c.Id}`,
-        title: `${c.Name}${c.ProductionYear ? ` (${c.ProductionYear})` : ""}`,
-        season: 1,
-        episode: idx + 1,
-        released: c.PremiereDate,
-        overview: c.Overview
-      }));
-
-      return {
-        meta: {
-          id: rawId,
-          type: "series",
-          name: libItem.Name,
-          poster,
-          background: poster,
-          posterShape: "landscape",
-          description: libItem.Overview || `${libItem.Name} koleksiyonu`,
-          genres: ["Benim Medyam"],
-          videos
-        }
-      };
-    } catch (e) {
-      return { meta: null };
-    }
-  }
-
-  // 1. BoxSet: emby:boxset:12345
+  // 1. BoxSet: emby:boxset:12345 (Movie Franchise Collection)
   if (rawId.startsWith("emby:boxset:")) {
     const boxsetId = rawId.replace("emby:boxset:", "");
     try {
@@ -1135,33 +1099,27 @@ async function resolveMeta(config, metaType, rawId) {
       if (!bRes.ok) return { meta: null };
       const boxset = await bRes.json();
 
-      const cRes = await fetch(`${authInfo.serverUrl}${authInfo.prefix}/Users/${authInfo.userId}/Items?ParentId=${boxsetId}&Fields=Genres,ProductionYear,Overview,ProviderIds,PremiereDate&api_key=${encodeURIComponent(authInfo.apiKey)}`, { headers: apiHeaders });
+      const cRes = await fetch(`${authInfo.serverUrl}${authInfo.prefix}/Users/${authInfo.userId}/Items?ParentId=${boxsetId}&Fields=Genres,ProductionYear,Overview,ProviderIds,PremiereDate&SortBy=SortName&SortOrder=Ascending&api_key=${encodeURIComponent(authInfo.apiKey)}`, { headers: apiHeaders });
       const cData = cRes.ok ? await cRes.json() : { Items: [] };
       const children = cData.Items || [];
 
       const poster = `${authInfo.serverUrl}${authInfo.prefix}/Items/${boxset.Id}/Images/Primary?api_key=${encodeURIComponent(authInfo.apiKey)}&maxWidth=400`;
       const background = `${authInfo.serverUrl}${authInfo.prefix}/Items/${boxset.Id}/Images/Backdrop?api_key=${encodeURIComponent(authInfo.apiKey)}&maxWidth=1280`;
 
-      const videos = children.map((c, idx) => ({
-        id: `emby:item:${c.Id}`,
-        title: `${c.Name}${c.ProductionYear ? ` (${c.ProductionYear})` : ""}`,
-        season: 1,
-        episode: idx + 1,
-        released: c.PremiereDate || (c.ProductionYear ? `${c.ProductionYear}-01-01` : undefined),
-        overview: c.Overview
-      }));
+      const filmTitles = children.map((c, idx) => `• ${idx + 1}. ${c.Name} (${c.ProductionYear || ''})`).join("\n");
+      const desc = `${boxset.Name} Film Koleksiyonu (${children.length} Film)\n\nİçerdiği Filmler:\n${filmTitles}${boxset.Overview ? `\n\n${boxset.Overview}` : ""}`;
 
       return {
         meta: {
           id: rawId,
-          type: "series",
+          type: "movie",
           name: boxset.Name,
           poster,
           background,
           posterShape: "poster",
-          description: boxset.Overview || "Emby / Jellyfin Koleksiyonu",
-          genres: boxset.Genres || [],
-          videos
+          description: desc,
+          genres: boxset.Genres && boxset.Genres.length ? boxset.Genres : ["Film Serisi", "Koleksiyon"],
+          releaseInfo: `${children.length} Film`
         }
       };
     } catch (e) {
@@ -1250,6 +1208,7 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
       {
         id: "collection-benim-medyam",
         title: "Benim Medyam",
+        viewMode: "FOLLOW_HOME",
         focusGlowEnabled: true,
         folders: []
       }
@@ -1264,12 +1223,16 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
     const views = vData.Items || [];
 
     const folders = [];
+    let boxsetsViewId = null;
+
     for (const v of views) {
       const colType = (v.CollectionType || "").toLowerCase();
       const isTv = colType === "tvshows";
       const isMovies = colType === "movies";
       const isBoxsets = colType === "boxsets";
       const isPlaylists = colType === "playlists";
+
+      if (isBoxsets) boxsetsViewId = v.Id;
 
       const coverImageUrl = `${authInfo.serverUrl}${authInfo.prefix}/Items/${v.Id}/Images/Primary?maxWidth=600&api_key=${encodeURIComponent(authInfo.apiKey)}`;
       const catalogSources = [];
@@ -1290,11 +1253,11 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
         );
       } else if (isBoxsets) {
         catalogSources.push(
-          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_boxsets`, type: "series" }
+          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_boxsets`, type: "movie" }
         );
       } else if (isPlaylists) {
         catalogSources.push(
-          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_playlists`, type: "series" }
+          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_playlists`, type: "movie" }
         );
       }
 
@@ -1312,14 +1275,58 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
       });
     }
 
-    return [
+    const collections = [
       {
         id: "collection-benim-medyam",
         title: "Benim Medyam",
+        viewMode: "FOLLOW_HOME",
         focusGlowEnabled: true,
         folders
       }
     ];
+
+    // If Emby has a BoxSets library, also create the "Film Koleksiyonları (Seriler)" collection with individual franchise folders
+    if (boxsetsViewId) {
+      try {
+        const bUrl = `${authInfo.serverUrl}${authInfo.prefix}/Users/${authInfo.userId}/Items?ParentId=${boxsetsViewId}&Fields=Id,Name,ImageTags&SortBy=SortName&SortOrder=Ascending&api_key=${encodeURIComponent(authInfo.apiKey)}`;
+        const bRes = await fetch(bUrl, { headers: { "Accept": "application/json" } });
+        if (bRes.ok) {
+          const bData = await bRes.json();
+          const boxsets = bData.Items || [];
+          if (boxsets.length > 0) {
+            const franchiseFolders = boxsets.map(b => {
+              const bCover = `${authInfo.serverUrl}${authInfo.prefix}/Items/${b.Id}/Images/Primary?maxWidth=400&api_key=${encodeURIComponent(authInfo.apiKey)}`;
+              const bBackdrop = `${authInfo.serverUrl}${authInfo.prefix}/Items/${b.Id}/Images/Backdrop?maxWidth=1280&api_key=${encodeURIComponent(authInfo.apiKey)}`;
+              return {
+                id: `folder-boxset-${b.Id}`,
+                title: b.Name,
+                hideTitle: false,
+                tileShape: "POSTER",
+                coverEmoji: "🎬",
+                coverImageUrl: bCover,
+                heroBackdropUrl: bBackdrop,
+                focusGifEnabled: false,
+                catalogSources: [
+                  { addonId: "org.omc725.nuvioemby", catalogId: `emby_boxset_${b.Id}`, type: "movie" }
+                ],
+                sources: []
+              };
+            });
+
+            collections.push({
+              id: "collection-film-serileri",
+              title: "Film Koleksiyonları (Seriler)",
+              viewMode: "FOLLOW_LAYOUT",
+              showAllTab: true,
+              focusGlowEnabled: true,
+              folders: franchiseFolders
+            });
+          }
+        }
+      } catch (e) {}
+    }
+
+    return collections;
   } catch (err) {
     return [];
   }
