@@ -435,6 +435,22 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
     <!-- Yapılandırma Formu -->
     <div class="card">
       <form id="configForm" onsubmit="return false;">
+        <!-- Kayıtlı Sunucular (LocalStorage) -->
+        <div class="form-group" id="savedServersGroup" style="display: none; margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px dashed rgba(255, 255, 255, 0.15);">
+          <label for="savedServersSelect" style="color: #6ee7b7; display: flex; align-items: center; justify-content: space-between;">
+            <span>💾 Kayıtlı Sunucularım</span>
+            <span class="label-hint" id="savedCountHint">0 sunucu</span>
+          </label>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <select id="savedServersSelect" style="flex: 1; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 0.75rem; padding: 0.75rem 1rem; font-size: 0.95rem; color: var(--text); outline: none; cursor: pointer;">
+              <option value="">-- Kayıtlı Sunucu Seçin veya Yeni Ekleyin --</option>
+            </select>
+            <button type="button" id="btnDeleteServer" title="Seçili sunucuyu sil" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 0.75rem; padding: 0.75rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+              🗑️ Sil
+            </button>
+          </div>
+        </div>
+
         <div class="form-group">
           <label for="serverUrl">
             Emby / Jellyfin Sunucu Adresi
@@ -464,6 +480,13 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
             <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
             <button type="button" class="toggle-pwd" id="togglePwd" title="Şifreyi Göster/Gizle">👁</button>
           </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 0.75rem;">
+          <label class="checkbox-group">
+            <input type="checkbox" id="rememberServer" checked>
+            <span>💾 Bu sunucuyu tarayıcıda hatırla (LocalStorage)</span>
+          </label>
         </div>
 
         <!-- Gelişmiş Ayarlar (Akordiyon) -->
@@ -614,6 +637,136 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
       return btoa(binary).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
     }
 
+    // --- LocalStorage Sunucu Yönetimi ---
+    const STORAGE_KEY = 'nuvio_emby_saved_servers';
+    const LAST_SERVER_KEY = 'nuvio_emby_last_server';
+
+    function getSavedServers() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveServers(servers) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(servers));
+      } catch (e) {}
+    }
+
+    function updateSavedServersUI() {
+      const servers = getSavedServers();
+      const group = document.getElementById('savedServersGroup');
+      const select = document.getElementById('savedServersSelect');
+      const hint = document.getElementById('savedCountHint');
+      const deleteBtn = document.getElementById('btnDeleteServer');
+
+      if (!servers || servers.length === 0) {
+        group.style.display = 'none';
+        deleteBtn.style.display = 'none';
+        return;
+      }
+
+      group.style.display = 'block';
+      hint.textContent = servers.length + ' sunucu kayıtlı';
+
+      const currentIdx = select.value;
+      let opts = '<option value="">-- Yeni / Başka Sunucu Girin --</option>';
+      for (let i = 0; i < servers.length; i++) {
+        const s = servers[i];
+        let sName = s.serverName;
+        if (!sName) {
+          try { sName = new URL(s.serverUrl).hostname; } catch(e) { sName = s.serverUrl; }
+        }
+        opts += '<option value="' + i + '">' + sName + ' (' + s.username + ') - ' + s.serverUrl + '</option>';
+      }
+      select.innerHTML = opts;
+
+      if (currentIdx !== '' && servers[parseInt(currentIdx, 10)]) {
+        select.value = currentIdx;
+        deleteBtn.style.display = 'block';
+      } else {
+        deleteBtn.style.display = select.value === '' ? 'none' : 'block';
+      }
+    }
+
+    function fillForm(s) {
+      if (!s) return;
+      if (s.serverUrl) document.getElementById('serverUrl').value = s.serverUrl;
+      if (s.username) document.getElementById('username').value = s.username;
+      if (s.password !== undefined) document.getElementById('password').value = s.password;
+      if (s.debugMode !== undefined) document.getElementById('debugMode').checked = !!s.debugMode;
+      if (s.logEndpoint !== undefined) document.getElementById('logEndpoint').value = s.logEndpoint || '';
+    }
+
+    function saveCurrentServer(extraInfo) {
+      extraInfo = extraInfo || {};
+      const rememberCheckbox = document.getElementById('rememberServer');
+      if (rememberCheckbox && !rememberCheckbox.checked) return;
+
+      const data = getFormData();
+      if (!data || !data.serverUrl || !data.username) return;
+
+      const servers = getSavedServers();
+      const normUrl = data.serverUrl.toLowerCase().replace(/\\/+$/, '');
+      const normUser = data.username.toLowerCase();
+
+      let existingIdx = -1;
+      for (let i = 0; i < servers.length; i++) {
+        const sUrl = (servers[i].serverUrl || '').toLowerCase().replace(/\\/+$/, '');
+        const sUser = (servers[i].username || '').toLowerCase();
+        if (sUrl === normUrl && sUser === normUser) {
+          existingIdx = i;
+          break;
+        }
+      }
+
+      let sName = extraInfo.serverName || (existingIdx >= 0 ? servers[existingIdx].serverName : '');
+      if (!sName) {
+        try { sName = new URL(data.serverUrl).hostname; } catch(e) { sName = data.serverUrl; }
+      }
+
+      const serverRecord = {
+        serverUrl: data.serverUrl,
+        username: data.username,
+        password: data.password,
+        debugMode: data.debugMode,
+        logEndpoint: data.logEndpoint,
+        serverName: sName,
+        updatedAt: Date.now()
+      };
+
+      if (existingIdx >= 0) {
+        servers[existingIdx] = serverRecord;
+      } else {
+        servers.unshift(serverRecord);
+      }
+
+      saveServers(servers);
+      try {
+        localStorage.setItem(LAST_SERVER_KEY, JSON.stringify(serverRecord));
+      } catch (e) {}
+
+      updateSavedServersUI();
+
+      let newIdx = 0;
+      for (let i = 0; i < servers.length; i++) {
+        const sUrl = (servers[i].serverUrl || '').toLowerCase().replace(/\\/+$/, '');
+        const sUser = (servers[i].username || '').toLowerCase();
+        if (sUrl === normUrl && sUser === normUser) {
+          newIdx = i;
+          break;
+        }
+      }
+      const select = document.getElementById('savedServersSelect');
+      if (select) {
+        select.value = String(newIdx);
+        document.getElementById('btnDeleteServer').style.display = 'block';
+      }
+    }
+
     // Form Değerlerini Topla
     function getFormData() {
       let serverUrl = document.getElementById('serverUrl').value.trim();
@@ -669,6 +822,7 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
 
         const res = await resp.json();
         if (res.ok) {
+          saveCurrentServer({ serverName: res.serverName });
           const typeLabel = res.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby';
           let libHtml = '';
           if (res.libraries && res.libraries.length > 0) {
@@ -704,6 +858,8 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
     btnGenerate.addEventListener('click', () => {
       const data = getFormData();
       if (!data) return;
+
+      saveCurrentServer();
 
       const token = encodeBase64Url(JSON.stringify(data));
       const origin = window.location.origin;
@@ -752,6 +908,85 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
 
       resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+
+    // Sayfa Başlatıldığında LocalStorage Kayıtlarını Oku
+    (function initSavedServers() {
+      updateSavedServersUI();
+      const select = document.getElementById('savedServersSelect');
+      const deleteBtn = document.getElementById('btnDeleteServer');
+
+      let lastServer = null;
+      try {
+        const raw = localStorage.getItem(LAST_SERVER_KEY);
+        if (raw) lastServer = JSON.parse(raw);
+      } catch (e) {}
+
+      const servers = getSavedServers();
+      if (!lastServer && servers.length > 0) {
+        lastServer = servers[0];
+      }
+
+      if (lastServer) {
+        fillForm(lastServer);
+        const normUrl = (lastServer.serverUrl || '').toLowerCase().replace(/\\/+$/, '');
+        const normUser = (lastServer.username || '').toLowerCase();
+        for (let i = 0; i < servers.length; i++) {
+          const sUrl = (servers[i].serverUrl || '').toLowerCase().replace(/\\/+$/, '');
+          const sUser = (servers[i].username || '').toLowerCase();
+          if (sUrl === normUrl && sUser === normUser) {
+            select.value = String(i);
+            deleteBtn.style.display = 'block';
+            break;
+          }
+        }
+      }
+
+      select.addEventListener('change', function() {
+        if (select.value === '') {
+          deleteBtn.style.display = 'none';
+          document.getElementById('serverUrl').value = '';
+          document.getElementById('username').value = '';
+          document.getElementById('password').value = '';
+          document.getElementById('serverUrl').focus();
+        } else {
+          deleteBtn.style.display = 'block';
+          const chosen = getSavedServers()[parseInt(select.value, 10)];
+          if (chosen) {
+            fillForm(chosen);
+            try {
+              localStorage.setItem(LAST_SERVER_KEY, JSON.stringify(chosen));
+            } catch (e) {}
+          }
+        }
+      });
+
+      deleteBtn.addEventListener('click', function() {
+        const idx = parseInt(select.value, 10);
+        if (isNaN(idx)) return;
+        const currentServers = getSavedServers();
+        const targetServer = currentServers[idx];
+        const label = targetServer ? (targetServer.serverName || targetServer.serverUrl) : 'Seçili sunucuyu';
+        if (confirm(label + ' kaydını silmek istediğinize emin misiniz?')) {
+          currentServers.splice(idx, 1);
+          saveServers(currentServers);
+          try {
+            localStorage.removeItem(LAST_SERVER_KEY);
+          } catch(e) {}
+          updateSavedServersUI();
+          if (currentServers.length > 0) {
+            fillForm(currentServers[0]);
+            select.value = '0';
+            deleteBtn.style.display = 'block';
+          } else {
+            select.value = '';
+            deleteBtn.style.display = 'none';
+            document.getElementById('serverUrl').value = '';
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+          }
+        }
+      });
+    })();
 
     // Kopyala Butonu
     const btnCopy = document.getElementById('btnCopy');
