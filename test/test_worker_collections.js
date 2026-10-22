@@ -128,7 +128,15 @@ async function runWorkerTests() {
     // Check Collection 1: Benim Medyam
     const benimMedyam = collections[0];
     assert.strictEqual(benimMedyam.title, "Benim Medyam");
+    assert.strictEqual(benimMedyam.viewMode, "TABBED_GRID");
+    assert.strictEqual(benimMedyam.pinToTop, true);
     assert.strictEqual(benimMedyam.folders.length, 4);
+
+    for (const folder of benimMedyam.folders) {
+      assert(Array.isArray(folder.sources) && folder.sources.length > 0, `Folder ${folder.title} must have non-empty sources array`);
+      assert.strictEqual(folder.sources.length, folder.catalogSources.length, "sources and catalogSources count must match");
+      assert.strictEqual(folder.sources[0].provider, "addon", "Source provider must be 'addon'");
+    }
 
     const boxsetFolder = benimMedyam.folders.find(f => f.title === "Koleksiyonlar");
     assert(boxsetFolder, "Koleksiyonlar folder must exist in Benim Medyam");
@@ -137,18 +145,25 @@ async function runWorkerTests() {
     // Check Collection 2: Film Koleksiyonları (Seriler)
     const filmKoleksiyonlari = collections[1];
     assert.strictEqual(filmKoleksiyonlari.title, "Film Koleksiyonları (Seriler)");
+    assert.strictEqual(filmKoleksiyonlari.viewMode, "FOLLOW_LAYOUT");
     assert.strictEqual(filmKoleksiyonlari.folders.length, 2, "Should have 2 franchise folders (Baba and Matrix)");
     
+    for (const folder of filmKoleksiyonlari.folders) {
+      assert(Array.isArray(folder.sources) && folder.sources.length > 0, `Franchise folder ${folder.title} must have non-empty sources`);
+      assert.strictEqual(folder.sources[0].provider, "addon");
+    }
+
     const babaFolder = filmKoleksiyonlari.folders.find(f => f.title === "Baba [Seri]");
     assert(babaFolder, "Baba franchise folder must exist");
     assert.strictEqual(babaFolder.tileShape, "POSTER");
     assert.strictEqual(babaFolder.catalogSources[0].type, "movie", "Franchise folder catalogSource must have type: 'movie' NOT 'series'!");
     assert.strictEqual(babaFolder.catalogSources[0].catalogId, "emby_boxset_box_baba");
+    assert.strictEqual(babaFolder.sources[0].catalogId, "emby_boxset_box_baba");
 
     console.log("✓ Test 1 Passed!\n");
 
     // 2. Test GET /:config/manifest.json has BoxSets as movie type and no fake series library catalog
-    console.log("Test 2: GET /:config/manifest.json sets BoxSets to 'movie' and omits fake series catalog...");
+    console.log("Test 2: GET /:config/manifest.json sets BoxSets to 'movie' and syncs all franchise catalogs...");
     const manifestRes = await worker.fetch(new Request(`https://worker.local/${token}/manifest.json`));
     assert.strictEqual(manifestRes.status, 200);
     const manifest = await manifestRes.json();
@@ -156,6 +171,15 @@ async function runWorkerTests() {
     const boxsetCat = manifest.catalogs.find(c => c.id.includes("_boxsets") || c.id === "emby_boxsets");
     assert(boxsetCat, "BoxSets catalog must exist in manifest");
     assert.strictEqual(boxsetCat.type, "movie", "BoxSets catalog MUST have type: 'movie' so it is not perceived as a TV series!");
+
+    // Franchise catalogs must be registered in manifest so Nuvio recognizes them as valid sources
+    const babaCat = manifest.catalogs.find(c => c.id === "emby_boxset_box_baba");
+    assert(babaCat, "emby_boxset_box_baba must be declared in manifest.catalogs for Nuvio source validation");
+    assert.strictEqual(babaCat.type, "movie");
+    assert.strictEqual(babaCat.name, "Baba [Seri]");
+
+    const matrixCat = manifest.catalogs.find(c => c.id === "emby_boxset_box_matrix");
+    assert(matrixCat, "emby_boxset_box_matrix must be declared in manifest.catalogs for Nuvio source validation");
 
     const fakeMediaCat = manifest.catalogs.find(c => c.id === "emby_my_media");
     assert(!fakeMediaCat, "Fake emby_my_media catalog should be removed to prevent fake TV series display");

@@ -537,8 +537,10 @@ const HTML_CONFIGURATOR = `<!DOCTYPE html>
           </button>
         </div>
 
-        <div style="margin-top: 0.75rem; font-size: 0.75rem; color: #94a3b8; line-height: 1.4;">
-          <strong>Nasıl Yüklenir:</strong> <a href="https://nuvio.tv" target="_blank" style="color: #60a5fa; text-decoration: underline;">nuvio.tv</a> adresinde hesabınıza giriş yapın → <strong>Account &gt; Collections &gt; Import</strong> kısmından bu <code>collections.json</code> dosyasını seçip onaylayın.
+        <div style="margin-top: 0.75rem; font-size: 0.75rem; color: #94a3b8; line-height: 1.5;">
+          <strong style="color: #cbd5e1;">📌 Önemli Kurulum Sırası (0 Kaynak Hatasını Önlemek İçin):</strong><br>
+          1. <strong>İlk Adım:</strong> Aşağıdaki manifest URL'sini kopyalayıp Nuvio uygulamasında <strong>Ayarlar &gt; Eklentiler (Addons) &gt; Add Addon</strong> bölümünden ekleyin.<br>
+          2. <strong>İkinci Adım:</strong> Ardından <a href="https://nuvio.tv" target="_blank" style="color: #60a5fa; text-decoration: underline;">nuvio.tv</a> paneline girip <strong>Collections &gt; Import</strong> ile bu <code>collections.json</code> dosyasını yükleyin. Eklentiniz kurulu olduğu için tüm klasörlerin kaynakları (Sources) ve türleri (Types) %100 eşleşecek ve dolu görünecektir.
         </div>
       </div>
 
@@ -1643,6 +1645,27 @@ async function getEmbyCatalogs(authInfo) {
             { name: "skip", isRequired: false }
           ]
         });
+
+        // Also register individual BoxSet franchises as valid catalogs so Nuvio recognizes their sources
+        try {
+          const bUrl = \`\${authInfo.serverUrl}\${authInfo.prefix}/Users/\${authInfo.userId}/Items?ParentId=\${v.Id}&Fields=Id,Name&SortBy=SortName&SortOrder=Ascending&api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
+          const bRes = await fetch(bUrl, { headers: { "Accept": "application/json" } });
+          if (bRes.ok) {
+            const bData = await bRes.json();
+            const boxsets = bData.Items || [];
+            for (const b of boxsets) {
+              catalogs.push({
+                type: "movie",
+                id: \`emby_boxset_\${b.Id}\`,
+                name: b.Name,
+                extra: [
+                  { name: "search", isRequired: false },
+                  { name: "skip", isRequired: false }
+                ]
+              });
+            }
+          }
+        } catch (e) {}
       } else if (isPlaylists) {
         catalogs.push({
           type: "movie",
@@ -1985,7 +2008,21 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
         catalogSources.push(
           { addonId: "org.omc725.nuvioemby", catalogId: \`emby_lib_\${v.Id}_playlists\`, type: "movie" }
         );
+      } else {
+        catalogSources.push(
+          { addonId: "org.omc725.nuvioemby", catalogId: \`emby_lib_\${v.Id}_all\`, type: isTv ? "series" : "movie" }
+        );
       }
+
+      // In Nuvio, sources must match catalogSources with provider: "addon".
+      // When sources: [] is empty, Nuvio treats the folder as having 0 sources!
+      const sources = catalogSources.map(cs => ({
+        provider: "addon",
+        addonId: cs.addonId,
+        catalogId: cs.catalogId,
+        type: cs.type,
+        genre: null
+      }));
 
       folders.push({
         id: \`folder-emby-\${v.Id}\`,
@@ -1997,7 +2034,7 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
         heroBackdropUrl: coverImageUrl,
         focusGifEnabled: false,
         catalogSources,
-        sources: []
+        sources
       });
     }
 
@@ -2005,7 +2042,9 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
       {
         id: "collection-benim-medyam",
         title: "Benim Medyam",
-        viewMode: "FOLLOW_HOME",
+        viewMode: "TABBED_GRID",
+        pinToTop: true,
+        showAllTab: true,
         focusGlowEnabled: true,
         folders
       }
@@ -2023,6 +2062,12 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
             const franchiseFolders = boxsets.map(b => {
               const bCover = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${b.Id}/Images/Primary?maxWidth=400&api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
               const bBackdrop = \`\${authInfo.serverUrl}\${authInfo.prefix}/Items/\${b.Id}/Images/Backdrop?maxWidth=1280&api_key=\${encodeURIComponent(authInfo.apiKey)}\`;
+              const franchiseCatalogSources = [
+                { addonId: "org.omc725.nuvioemby", catalogId: \`emby_boxset_\${b.Id}\`, type: "movie" }
+              ];
+              const franchiseSources = [
+                { provider: "addon", addonId: "org.omc725.nuvioemby", catalogId: \`emby_boxset_\${b.Id}\`, type: "movie", genre: null }
+              ];
               return {
                 id: \`folder-boxset-\${b.Id}\`,
                 title: b.Name,
@@ -2032,10 +2077,8 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
                 coverImageUrl: bCover,
                 heroBackdropUrl: bBackdrop,
                 focusGifEnabled: false,
-                catalogSources: [
-                  { addonId: "org.omc725.nuvioemby", catalogId: \`emby_boxset_\${b.Id}\`, type: "movie" }
-                ],
-                sources: []
+                catalogSources: franchiseCatalogSources,
+                sources: franchiseSources
               };
             });
 
@@ -2043,6 +2086,7 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
               id: "collection-film-serileri",
               title: "Film Koleksiyonları (Seriler)",
               viewMode: "FOLLOW_LAYOUT",
+              pinToTop: false,
               showAllTab: true,
               focusGlowEnabled: true,
               folders: franchiseFolders
