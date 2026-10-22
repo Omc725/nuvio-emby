@@ -153,8 +153,8 @@ async function runWorkerTests() {
       assert.strictEqual(folder.sources[0].provider, "addon");
     }
 
-    const babaFolder = filmKoleksiyonlari.folders.find(f => f.title === "Baba [Seri]");
-    assert(babaFolder, "Baba franchise folder must exist");
+    const babaFolder = filmKoleksiyonlari.folders.find(f => f.title === "Baba");
+    assert(babaFolder, "Baba franchise folder must exist with cleaned title 'Baba'");
     assert.strictEqual(babaFolder.tileShape, "POSTER");
     assert.strictEqual(babaFolder.catalogSources[0].type, "movie", "Franchise folder catalogSource must have type: 'movie' NOT 'series'!");
     assert.strictEqual(babaFolder.catalogSources[0].catalogId, "emby_boxset_box_baba");
@@ -171,15 +171,18 @@ async function runWorkerTests() {
     const boxsetCat = manifest.catalogs.find(c => c.id.includes("_boxsets") || c.id === "emby_boxsets");
     assert(boxsetCat, "BoxSets catalog must exist in manifest");
     assert.strictEqual(boxsetCat.type, "movie", "BoxSets catalog MUST have type: 'movie' so it is not perceived as a TV series!");
+    assert(boxsetCat.extra.some(e => e.name === "search" && e.isRequired === true), "BoxSet catalog must have search isRequired: true to hide from Keşfet");
 
     // Franchise catalogs must be registered in manifest so Nuvio recognizes them as valid sources
     const babaCat = manifest.catalogs.find(c => c.id === "emby_boxset_box_baba");
     assert(babaCat, "emby_boxset_box_baba must be declared in manifest.catalogs for Nuvio source validation");
     assert.strictEqual(babaCat.type, "movie");
-    assert.strictEqual(babaCat.name, "Baba [Seri]");
+    assert.strictEqual(babaCat.name, "Baba", "Franchise catalog name must be cleaned to 'Baba'");
+    assert(babaCat.extra.some(e => e.name === "search" && e.isRequired === true), "Franchise catalog must have search isRequired: true to be excluded from Keşfet dropdown");
 
     const matrixCat = manifest.catalogs.find(c => c.id === "emby_boxset_box_matrix");
     assert(matrixCat, "emby_boxset_box_matrix must be declared in manifest.catalogs for Nuvio source validation");
+    assert.strictEqual(matrixCat.name, "Matrix");
 
     const fakeMediaCat = manifest.catalogs.find(c => c.id === "emby_my_media");
     assert(!fakeMediaCat, "Fake emby_my_media catalog should be removed to prevent fake TV series display");

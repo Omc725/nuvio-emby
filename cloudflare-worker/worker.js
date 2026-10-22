@@ -714,64 +714,162 @@ function formatEmbyItemToMeta(item, authInfo, defaultType) {
   };
 }
 
+function cleanLibraryName(rawName, colType) {
+  if (!rawName) {
+    if (colType === "tvshows") return "Diziler";
+    if (colType === "movies") return "Filmler";
+    if (colType === "boxsets") return "Koleksiyonlar";
+    if (colType === "playlists") return "Oynatma Listeleri";
+    return "Kütüphane";
+  }
+  let cleaned = rawName
+    .replace(/\s*-\s*filmbol.*$/i, "")
+    .replace(/^filmbol\s*-\s*/i, "")
+    .replace(/\s*\[.*?\]/g, "")
+    .trim();
+
+  const lower = cleaned.toLowerCase();
+  if (colType === "movies" || lower.includes("film") || lower.includes("movie")) {
+    return cleaned.length > 0 && !lower.startsWith("filmler -") ? cleaned : "Filmler";
+  }
+  if (colType === "tvshows" || lower.includes("dizi") || lower.includes("series") || lower.includes("show")) {
+    return cleaned.length > 0 && !lower.startsWith("diziler -") ? cleaned : "Diziler";
+  }
+  if (colType === "boxsets" || lower.includes("koleksiyon") || lower.includes("boxset")) {
+    return "Koleksiyonlar";
+  }
+  if (colType === "playlists" || lower.includes("oynatma") || lower.includes("playlist")) {
+    return "Oynatma Listeleri";
+  }
+  return cleaned || rawName;
+}
+
+function cleanBoxsetName(rawName) {
+  if (!rawName) return "";
+  return rawName
+    .replace(/\s*\[animasyon[- ]seri\]/gi, " (Animasyon)")
+    .replace(/\s*\[seri\]/gi, "")
+    .replace(/\s*\[koleksiyon\]/gi, "")
+    .replace(/\s*\[collection\]/gi, "")
+    .replace(/\s*\[.*?\]/g, "")
+    .replace(/\s*-\s*filmbol.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function getDefaultCatalogs() {
   const standardYears = [
     "2026", "2025", "2024", "2023", "2022", "2021", "2020",
     "2019", "2018", "2017", "2016", "2015", "2010s", "2000s", "1990s"
   ];
+  const standardGenres = [
+    "Aksiyon", "Gerilim", "Suç", "Macera", "Korku", "Gizem", "Dram", "Romantik", "Fantastik", "Komedi", "Bilim-Kurgu", "Animasyon", "Aile", "Belgesel"
+  ];
+  const sortOptions = ["Alfabetik", "Puan", "Yıl", "İzlenme"];
+
   return [
     {
       type: "movie",
-      id: "emby_movies_resume",
-      name: "Filmler - İzlemeye Devam Et",
-      extra: [{ name: "skip", isRequired: false }]
+      id: "emby_all_movies",
+      name: "Alfabetik (A-Z)",
+      extra: [
+        { name: "genre", options: standardGenres, isRequired: false },
+        { name: "sort", options: sortOptions, isRequired: false },
+        { name: "year", options: standardYears, isRequired: false },
+        { name: "search", isRequired: false },
+        { name: "skip", isRequired: false }
+      ]
+    },
+    {
+      type: "movie",
+      id: "emby_movies_top",
+      name: "Puan (En İyiler)",
+      extra: [
+        { name: "genre", options: standardGenres, isRequired: false },
+        { name: "year", options: standardYears, isRequired: false },
+        { name: "skip", isRequired: false }
+      ]
     },
     {
       type: "movie",
       id: "emby_movies_latest",
-      name: "Filmler - Son Eklenenler",
-      extra: [{ name: "skip", isRequired: false }]
+      name: "Yıl (En Yeniler)",
+      extra: [
+        { name: "genre", options: standardGenres, isRequired: false },
+        { name: "year", options: standardYears, isRequired: false },
+        { name: "skip", isRequired: false }
+      ]
     },
     {
       type: "movie",
-      id: "emby_all_movies",
-      name: "Filmler - Tümü (A-Z)",
+      id: "emby_movies_popular",
+      name: "İzlenme (Popüler)",
       extra: [
-        { name: "genre", options: ["Aksiyon", "Gerilim", "Suç", "Macera", "Korku", "Gizem", "Dram", "Romantik", "Fantastik", "Komedi", "Bilim-Kurgu", "Animasyon", "Aile", "Belgesel"], isRequired: false },
+        { name: "genre", options: standardGenres, isRequired: false },
+        { name: "year", options: standardYears, isRequired: false },
+        { name: "skip", isRequired: false }
+      ]
+    },
+    {
+      type: "movie",
+      id: "emby_movies_resume",
+      name: "İzlemeye Devam Et",
+      extra: [{ name: "skip", isRequired: false }]
+    },
+    {
+      type: "series",
+      id: "emby_all_series",
+      name: "Alfabetik (A-Z)",
+      extra: [
+        { name: "genre", options: standardGenres, isRequired: false },
+        { name: "sort", options: sortOptions, isRequired: false },
         { name: "year", options: standardYears, isRequired: false },
         { name: "search", isRequired: false },
+        { name: "skip", isRequired: false }
+      ]
+    },
+    {
+      type: "series",
+      id: "emby_series_top",
+      name: "Puan (En İyiler)",
+      extra: [
+        { name: "genre", options: standardGenres, isRequired: false },
+        { name: "year", options: standardYears, isRequired: false },
+        { name: "skip", isRequired: false }
+      ]
+    },
+    {
+      type: "series",
+      id: "emby_series_latest",
+      name: "Yıl (En Yeniler)",
+      extra: [
+        { name: "genre", options: standardGenres, isRequired: false },
+        { name: "year", options: standardYears, isRequired: false },
+        { name: "skip", isRequired: false }
+      ]
+    },
+    {
+      type: "series",
+      id: "emby_series_popular",
+      name: "İzlenme (Popüler)",
+      extra: [
+        { name: "genre", options: standardGenres, isRequired: false },
+        { name: "year", options: standardYears, isRequired: false },
         { name: "skip", isRequired: false }
       ]
     },
     {
       type: "series",
       id: "emby_series_resume",
-      name: "Diziler - İzlemeye Devam Et",
+      name: "İzlemeye Devam Et",
       extra: [{ name: "skip", isRequired: false }]
-    },
-    {
-      type: "series",
-      id: "emby_series_latest",
-      name: "Diziler - Son Eklenenler",
-      extra: [{ name: "skip", isRequired: false }]
-    },
-    {
-      type: "series",
-      id: "emby_all_series",
-      name: "Diziler - Tümü (A-Z)",
-      extra: [
-        { name: "genre", options: ["Aksiyon", "Gerilim", "Suç", "Macera", "Korku", "Gizem", "Dram", "Romantik", "Komedi", "Bilim-Kurgu", "Animasyon"], isRequired: false },
-        { name: "year", options: standardYears, isRequired: false },
-        { name: "search", isRequired: false },
-        { name: "skip", isRequired: false }
-      ]
     },
     {
       type: "movie",
       id: "emby_boxsets",
-      name: "Koleksiyonlar (Film Serileri)",
+      name: "Koleksiyonlar",
       extra: [
-        { name: "search", isRequired: false },
+        { name: "search", isRequired: true },
         { name: "skip", isRequired: false }
       ]
     }
@@ -814,6 +912,8 @@ async function getEmbyCatalogs(authInfo) {
       return [];
     }
 
+    const movieViews = views.filter(v => (v.CollectionType || "").toLowerCase() === "movies");
+    const tvViews = views.filter(v => (v.CollectionType || "").toLowerCase() === "tvshows");
     const catalogs = [];
 
     for (const v of views) {
@@ -825,95 +925,127 @@ async function getEmbyCatalogs(authInfo) {
 
       if (isMovies) {
         const genres = await fetchGenres(v.Id);
-        const movieExtra = [
+        const prefix = movieViews.length > 1 ? `${cleanLibraryName(v.Name, "movies")} - ` : "";
+
+        const sharedExtra = [];
+        if (genres.length > 0) {
+          sharedExtra.push({ name: "genre", options: genres, isRequired: false });
+        }
+        sharedExtra.push({ name: "year", options: standardYears, isRequired: false });
+        sharedExtra.push({ name: "skip", isRequired: false });
+
+        const allExtra = [
+          ...(genres.length > 0 ? [{ name: "genre", options: genres, isRequired: false }] : []),
+          { name: "sort", options: ["Alfabetik", "Puan", "Yıl", "İzlenme"], isRequired: false },
+          { name: "year", options: standardYears, isRequired: false },
           { name: "search", isRequired: false },
           { name: "skip", isRequired: false }
         ];
-        if (genres.length > 0) {
-          movieExtra.unshift({ name: "genre", options: genres, isRequired: false });
-        }
-        movieExtra.splice(genres.length > 0 ? 1 : 0, 0, { name: "year", options: standardYears, isRequired: false });
 
-        // 1. İzlemeye Devam Et (Continue Watching)
-        catalogs.push({
-          type: "movie",
-          id: `emby_lib_${v.Id}_resume`,
-          name: `${v.Name} - İzlemeye Devam Et`,
-          extra: [{ name: "skip", isRequired: false }]
-        });
-
-        // 2. Son Eklenenler (Latest)
-        catalogs.push({
-          type: "movie",
-          id: `emby_lib_${v.Id}_latest`,
-          name: `${v.Name} - Son Eklenenler`,
-          extra: [{ name: "skip", isRequired: false }]
-        });
-
-        // 3. Tümü (A - Z) with Filters
+        // 1. Alfabetik (A-Z)
         catalogs.push({
           type: "movie",
           id: `emby_lib_${v.Id}_all`,
-          name: `${v.Name} - Tümü (A-Z)`,
-          extra: movieExtra
+          name: `${prefix}Alfabetik (A-Z)`,
+          extra: allExtra
         });
 
-        // 4. En Çok Oy Alanlar
+        // 2. Puan (En İyiler)
         catalogs.push({
           type: "movie",
           id: `emby_lib_${v.Id}_top`,
-          name: `${v.Name} - En Çok Oy Alanlar`,
+          name: `${prefix}Puan (En İyiler)`,
+          extra: sharedExtra
+        });
+
+        // 3. Yıl (En Yeniler)
+        catalogs.push({
+          type: "movie",
+          id: `emby_lib_${v.Id}_latest`,
+          name: `${prefix}Yıl (En Yeniler)`,
+          extra: sharedExtra
+        });
+
+        // 4. İzlenme (Popüler)
+        catalogs.push({
+          type: "movie",
+          id: `emby_lib_${v.Id}_popular`,
+          name: `${prefix}İzlenme (Popüler)`,
+          extra: sharedExtra
+        });
+
+        // 5. İzlemeye Devam Et
+        catalogs.push({
+          type: "movie",
+          id: `emby_lib_${v.Id}_resume`,
+          name: `${prefix}İzlemeye Devam Et`,
           extra: [{ name: "skip", isRequired: false }]
         });
       } else if (isTv) {
         const genres = await fetchGenres(v.Id);
-        const tvExtra = [
+        const prefix = tvViews.length > 1 ? `${cleanLibraryName(v.Name, "tvshows")} - ` : "";
+
+        const sharedExtra = [];
+        if (genres.length > 0) {
+          sharedExtra.push({ name: "genre", options: genres, isRequired: false });
+        }
+        sharedExtra.push({ name: "year", options: standardYears, isRequired: false });
+        sharedExtra.push({ name: "skip", isRequired: false });
+
+        const allExtra = [
+          ...(genres.length > 0 ? [{ name: "genre", options: genres, isRequired: false }] : []),
+          { name: "sort", options: ["Alfabetik", "Puan", "Yıl", "İzlenme"], isRequired: false },
+          { name: "year", options: standardYears, isRequired: false },
           { name: "search", isRequired: false },
           { name: "skip", isRequired: false }
         ];
-        if (genres.length > 0) {
-          tvExtra.unshift({ name: "genre", options: genres, isRequired: false });
-        }
-        tvExtra.splice(genres.length > 0 ? 1 : 0, 0, { name: "year", options: standardYears, isRequired: false });
 
-        // 1. İzlemeye Devam Et
-        catalogs.push({
-          type: "series",
-          id: `emby_lib_${v.Id}_resume`,
-          name: `${v.Name} - İzlemeye Devam Et`,
-          extra: [{ name: "skip", isRequired: false }]
-        });
-
-        // 2. Son Eklenenler
-        catalogs.push({
-          type: "series",
-          id: `emby_lib_${v.Id}_latest`,
-          name: `${v.Name} - Son Eklenenler`,
-          extra: [{ name: "skip", isRequired: false }]
-        });
-
-        // 3. Tümü (A - Z) with Filters
+        // 1. Alfabetik (A-Z)
         catalogs.push({
           type: "series",
           id: `emby_lib_${v.Id}_all`,
-          name: `${v.Name} - Tümü (A-Z)`,
-          extra: tvExtra
+          name: `${prefix}Alfabetik (A-Z)`,
+          extra: allExtra
         });
 
-        // 4. En Çok Oy Alanlar
+        // 2. Puan (En İyiler)
         catalogs.push({
           type: "series",
           id: `emby_lib_${v.Id}_top`,
-          name: `${v.Name} - En Çok Oy Alanlar`,
+          name: `${prefix}Puan (En İyiler)`,
+          extra: sharedExtra
+        });
+
+        // 3. Yıl (En Yeniler)
+        catalogs.push({
+          type: "series",
+          id: `emby_lib_${v.Id}_latest`,
+          name: `${prefix}Yıl (En Yeniler)`,
+          extra: sharedExtra
+        });
+
+        // 4. İzlenme (Popüler)
+        catalogs.push({
+          type: "series",
+          id: `emby_lib_${v.Id}_popular`,
+          name: `${prefix}İzlenme (Popüler)`,
+          extra: sharedExtra
+        });
+
+        // 5. İzlemeye Devam Et
+        catalogs.push({
+          type: "series",
+          id: `emby_lib_${v.Id}_resume`,
+          name: `${prefix}İzlemeye Devam Et`,
           extra: [{ name: "skip", isRequired: false }]
         });
       } else if (isBoxsets) {
         catalogs.push({
           type: "movie",
           id: `emby_lib_${v.Id}_boxsets`,
-          name: `${v.Name} (Film Serileri)`,
+          name: "Koleksiyonlar",
           extra: [
-            { name: "search", isRequired: false },
+            { name: "search", isRequired: true },
             { name: "skip", isRequired: false }
           ]
         });
@@ -929,9 +1061,9 @@ async function getEmbyCatalogs(authInfo) {
               catalogs.push({
                 type: "movie",
                 id: `emby_boxset_${b.Id}`,
-                name: b.Name,
+                name: cleanBoxsetName(b.Name),
                 extra: [
-                  { name: "search", isRequired: false },
+                  { name: "search", isRequired: true },
                   { name: "skip", isRequired: false }
                 ]
               });
@@ -942,9 +1074,9 @@ async function getEmbyCatalogs(authInfo) {
         catalogs.push({
           type: "movie",
           id: `emby_lib_${v.Id}_playlists`,
-          name: v.Name,
+          name: "Oynatma Listeleri",
           extra: [
-            { name: "search", isRequired: false },
+            { name: "search", isRequired: true },
             { name: "skip", isRequired: false }
           ]
         });
@@ -952,7 +1084,7 @@ async function getEmbyCatalogs(authInfo) {
         catalogs.push({
           type: isTv ? "series" : "movie",
           id: `emby_lib_${v.Id}_all`,
-          name: v.Name,
+          name: cleanLibraryName(v.Name, colType),
           extra: [
             { name: "search", isRequired: false },
             { name: "skip", isRequired: false }
@@ -982,7 +1114,7 @@ async function resolveCatalog(config, catalogType, catalogId, extraStr, searchPa
 
   const viewMatch = catalogId.match(/^emby_lib_([a-zA-Z0-9-]+)(?:_([a-z]+))?$/);
   const viewId = viewMatch ? viewMatch[1] : null;
-  const subType = (viewMatch && viewMatch[2]) || (catalogId.includes("_resume") ? "resume" : (catalogId.includes("_latest") ? "latest" : (catalogId.includes("_boxsets") ? "boxsets" : "all")));
+  const subType = (viewMatch && viewMatch[2]) || (catalogId.includes("_resume") ? "resume" : (catalogId.includes("_latest") ? "latest" : (catalogId.includes("_top") ? "top" : (catalogId.includes("_popular") ? "popular" : (catalogId.includes("_boxsets") ? "boxsets" : (catalogId.includes("_playlists") ? "playlists" : "all"))))));
 
   // 0. Handle individual BoxSet contents (movie franchise folders)
   if (catalogId.startsWith("emby_boxset_")) {
@@ -1028,7 +1160,7 @@ async function resolveCatalog(config, catalogType, catalogId, extraStr, searchPa
       queryParams.push("IncludeItemTypes=Movie");
     }
   } else if (subType === "latest") {
-    queryParams.push("SortBy=DateCreated");
+    queryParams.push("SortBy=DateCreated,PremiereDate");
     queryParams.push("SortOrder=Descending");
     if (isTv) {
       queryParams.push("IncludeItemTypes=Series");
@@ -1037,6 +1169,14 @@ async function resolveCatalog(config, catalogType, catalogId, extraStr, searchPa
     }
   } else if (subType === "top") {
     queryParams.push("SortBy=CommunityRating,SortName");
+    queryParams.push("SortOrder=Descending");
+    if (isTv) {
+      queryParams.push("IncludeItemTypes=Series");
+    } else {
+      queryParams.push("IncludeItemTypes=Movie");
+    }
+  } else if (subType === "popular") {
+    queryParams.push("SortBy=PlayCount");
     queryParams.push("SortOrder=Descending");
     if (isTv) {
       queryParams.push("IncludeItemTypes=Series");
@@ -1080,6 +1220,24 @@ async function resolveCatalog(config, catalogType, catalogId, extraStr, searchPa
       queryParams.push(`Years=${yearsArr.join(",")}`);
     } else {
       queryParams.push(`Years=${encodeURIComponent(year)}`);
+    }
+  }
+
+  if (extraArgs.sort) {
+    const s = String(extraArgs.sort).toLowerCase();
+    queryParams = queryParams.filter(p => !p.startsWith("SortBy=") && !p.startsWith("SortOrder="));
+    if (s.includes("puan") || s.includes("rating") || s.includes("top")) {
+      queryParams.push("SortBy=CommunityRating,SortName");
+      queryParams.push("SortOrder=Descending");
+    } else if (s.includes("yıl") || s.includes("year") || s.includes("latest") || s.includes("date")) {
+      queryParams.push("SortBy=DateCreated,PremiereDate");
+      queryParams.push("SortOrder=Descending");
+    } else if (s.includes("izlenme") || s.includes("popular") || s.includes("play")) {
+      queryParams.push("SortBy=PlayCount");
+      queryParams.push("SortOrder=Descending");
+    } else if (s.includes("alfabetik") || s.includes("name") || s.includes("a-z")) {
+      queryParams.push("SortBy=SortName");
+      queryParams.push("SortOrder=Ascending");
     }
   }
 
@@ -1262,15 +1420,17 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
         catalogSources.push(
           { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_resume`, type: "movie" },
           { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_latest`, type: "movie" },
-          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_all`, type: "movie" },
-          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_top`, type: "movie" }
+          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_top`, type: "movie" },
+          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_popular`, type: "movie" },
+          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_all`, type: "movie" }
         );
       } else if (isTv) {
         catalogSources.push(
           { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_resume`, type: "series" },
           { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_latest`, type: "series" },
-          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_all`, type: "series" },
-          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_top`, type: "series" }
+          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_top`, type: "series" },
+          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_popular`, type: "series" },
+          { addonId: "org.omc725.nuvioemby", catalogId: `emby_lib_${v.Id}_all`, type: "series" }
         );
       } else if (isBoxsets) {
         catalogSources.push(
@@ -1298,7 +1458,7 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
 
       folders.push({
         id: `folder-emby-${v.Id}`,
-        title: v.Name,
+        title: cleanLibraryName(v.Name, colType),
         hideTitle: false,
         tileShape: "LANDSCAPE",
         coverEmoji: isMovies ? "🎬" : (isTv ? "📺" : (isBoxsets ? "📦" : "📑")),
@@ -1342,7 +1502,7 @@ async function generateNuvioCollections(authInfo, configToken, userConfig) {
               ];
               return {
                 id: `folder-boxset-${b.Id}`,
-                title: b.Name,
+                title: cleanBoxsetName(b.Name),
                 hideTitle: false,
                 tileShape: "POSTER",
                 coverEmoji: "🎬",

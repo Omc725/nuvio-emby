@@ -4,3 +4,5 @@ node_modules/
 .env
 emby-audio-downloader.js
 test/test-audio-dl.js
+.wrangler/
+
